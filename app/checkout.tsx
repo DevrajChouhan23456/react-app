@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, Alert, ActivityIndicator,
+  StyleSheet, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,14 +10,15 @@ import { COLORS, SPACING, RADIUS, SHADOW } from '@/constants/theme';
 import { useCartStore, DELIVERY_FEE_CONST, TAX_RATE_CONST } from '@/store/cartStore';
 import { useAuthStore } from '@/store/authStore';
 import { useOrderStore } from '@/store/orderStore';
-
-type PaymentMethod = 'cod' | 'online';
+import PaymentMethodSelector, { PaymentMethod } from '@/components/PaymentMethodSelector';
+import { useRazorpay } from '@/hooks/useRazorpay';
 
 export default function CheckoutScreen() {
   const router = useRouter();
   const { items, getSubtotal, getTotal, discount, coupon, clearCart } = useCartStore();
   const { user } = useAuthStore();
   const { placeOrder } = useOrderStore();
+  const { initiatePayment, status: payStatus } = useRazorpay();
 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cod');
   const [loading, setLoading] = useState(false);
@@ -27,30 +28,58 @@ export default function CheckoutScreen() {
   const tax = Math.round(subtotal * TAX_RATE_CONST);
   const total = Math.round(getTotal());
 
+  const isProcessing = loading || ['creating_order', 'processing', 'verifying'].includes(payStatus);
+
+  const getPayButtonLabel = () => {
+    if (payStatus === 'creating_order') return 'Creating order...';
+    if (payStatus === 'processing') return 'Opening payment...';
+    if (payStatus === 'verifying') return 'Verifying payment...';
+    if (loading) return 'Placing order...';
+    return paymentMethod === 'cod' ? 'Place Order' : `Pay ₹${total}`;
+  };
+
   const handlePlaceOrder = async () => {
-    if (!defaultAddress) {
-      Alert.alert('No Address', 'Please add a delivery address first.');
-      return;
-    }
+    if (!defaultAddress) return;
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 1500));
-    const order = placeOrder({
-      items: items.map((i) => ({
-        id: i.id,
-        name: i.name,
-        price: i.price,
-        quantity: i.quantity,
-        addons: i.selectedAddons,
-      })),
-      status: 'placed',
-      total,
-      address: `${defaultAddress.line1}, ${defaultAddress.area}, ${defaultAddress.city}`,
-      paymentMethod,
-      estimatedTime: '30-40 min',
-    });
-    clearCart();
-    setLoading(false);
-    router.replace('/order-tracking');
+
+    const finalizeOrder = (paymentId?: string) => {
+      placeOrder({
+        items: items.map((i) => ({
+          id: i.id,
+          name: i.name,
+          price: i.price,
+          quantity: i.quantity,
+          addons: i.selectedAddons,
+        })),
+        status: 'placed',
+        total,
+        address: `${defaultAddress.line1}, ${defaultAddress.area}, ${defaultAddress.city}`,
+        paymentMethod,
+        estimatedTime: '30-40 min',
+      });
+      clearCart();
+      setLoading(false);
+      router.replace('/order-tracking');
+    };
+
+    if (paymentMethod === 'cod') {
+      await new Promise((r) => setTimeout(r, 1200));
+      finalizeOrder();
+    } else {
+      setLoading(false);
+      await initiatePayment(
+        {
+          orderId: 'ORD-' + Date.now(),
+          amount: total * 100, // paise
+          customerName: user?.name || 'Customer',
+          customerPhone: user?.phone || '',
+          customerEmail: user?.email,
+          description: `Dal Bafla Order — ${items.length} item${items.length > 1 ? 's' : ''}`,
+        },
+        (paymentId) => finalizeOrder(paymentId),
+        (err) => console.log('Payment failed:', err)
+      );
+    }
   };
 
   return (
@@ -77,7 +106,8 @@ export default function CheckoutScreen() {
                 <View style={styles.addressBody}>
                   <Text style={styles.addressLabel}>{defaultAddress.label}</Text>
                   <Text style={styles.addressText}>
-                    {defaultAddress.line1}, {defaultAddress.area}, {defaultAddress.city} - {defaultAddress.pincode}
+                    {defaultAddress.line1}, {defaultAddress.area},{' '}
+                    {defaultAddress.city} - {defaultAddress.pincode}
                   </Text>
                 </View>
                 <TouchableOpacity>
@@ -110,36 +140,14 @@ export default function CheckoutScreen() {
         {/* Payment Method */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Payment Method</Text>
-          <View style={styles.paymentRow}>
-            {(['cod', 'online'] as PaymentMethod[]).map((method) => (
-              <TouchableOpacity
-                key={method}
-                style={[styles.paymentOption, paymentMethod === method && styles.paymentOptionActive]}
-                onPress={() => setPaymentMethod(method)}
-              >
-                <Ionicons
-                  name={method === 'cod' ? 'cash-outline' : 'card-outline'}
-                  size={24}
-                  color={paymentMethod === method ? COLORS.primary : COLORS.textMuted}
-                />
-                <Text style={[styles.paymentLabel, paymentMethod === method && styles.paymentLabelActive]}>
-                  {method === 'cod' ? 'Cash on Delivery' : 'Online Payment'}
-                </Text>
-                <View style={[styles.radio, paymentMethod === method && styles.radioActive]}>
-                  {paymentMethod === method && <View style={styles.radioDot} />}
-                </View>
-              </TouchableOpacity>
-            ))}
-          </View>
-          {paymentMethod === 'online' && (
-            <View style={styles.onlineNote}>
-              <Ionicons name="information-circle-outline" size={16} color={COLORS.info} />
-              <Text style={styles.onlineNoteText}>Razorpay integration — coming soon</Text>
-            </View>
-          )}
+          <PaymentMethodSelector
+            selected={paymentMethod}
+            onChange={setPaymentMethod}
+            total={total}
+          />
         </View>
 
-        {/* Bill */}
+        {/* Bill Details */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Bill Details</Text>
           <View style={styles.card}>
@@ -172,23 +180,27 @@ export default function CheckoutScreen() {
         <View style={{ height: 100 }} />
       </ScrollView>
 
-      {/* Place Order Button */}
+      {/* Place Order / Pay Button */}
       <View style={styles.footer}>
         <View>
           <Text style={styles.footerTotal}>₹{total}</Text>
           <Text style={styles.footerLabel}>Total Payable</Text>
         </View>
         <TouchableOpacity
-          style={[styles.placeOrderBtn, loading && styles.placeOrderBtnDisabled]}
+          style={[styles.placeOrderBtn, isProcessing && styles.btnDisabled]}
           onPress={handlePlaceOrder}
-          disabled={loading}
+          disabled={isProcessing}
         >
-          {loading ? (
+          {isProcessing ? (
             <ActivityIndicator color={COLORS.white} />
           ) : (
             <>
-              <Text style={styles.placeOrderText}>Place Order</Text>
-              <Ionicons name="checkmark-circle" size={20} color={COLORS.white} />
+              <Ionicons
+                name={paymentMethod === 'cod' ? 'checkmark-circle' : 'card'}
+                size={20}
+                color={COLORS.white}
+              />
+              <Text style={styles.placeOrderText}>{getPayButtonLabel()}</Text>
             </>
           )}
         </TouchableOpacity>
@@ -203,7 +215,7 @@ const styles = StyleSheet.create({
   backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: 18, fontWeight: '800', color: COLORS.text },
   section: { paddingHorizontal: SPACING.base, marginTop: SPACING.base },
-  sectionTitle: { fontSize: 14, fontWeight: '700', color: COLORS.textMuted, marginBottom: SPACING.sm, textTransform: 'uppercase', letterSpacing: 0.5 },
+  sectionTitle: { fontSize: 13, fontWeight: '700', color: COLORS.textMuted, marginBottom: SPACING.sm, textTransform: 'uppercase', letterSpacing: 0.5 },
   card: { backgroundColor: COLORS.white, borderRadius: RADIUS.lg, padding: SPACING.base, ...SHADOW.sm },
   addressRow: { flexDirection: 'row', alignItems: 'flex-start', gap: SPACING.md },
   addressIcon: { width: 40, height: 40, backgroundColor: COLORS.secondary, borderRadius: RADIUS.md, alignItems: 'center', justifyContent: 'center' },
@@ -217,16 +229,6 @@ const styles = StyleSheet.create({
   orderItemQty: { fontSize: 14, fontWeight: '700', color: COLORS.primary, width: 30 },
   orderItemName: { flex: 1, fontSize: 14, color: COLORS.text },
   orderItemPrice: { fontSize: 14, fontWeight: '700', color: COLORS.text },
-  paymentRow: { gap: SPACING.sm },
-  paymentOption: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md, backgroundColor: COLORS.white, borderRadius: RADIUS.lg, padding: SPACING.base, borderWidth: 2, borderColor: COLORS.border, ...SHADOW.sm },
-  paymentOptionActive: { borderColor: COLORS.primary, backgroundColor: COLORS.secondary },
-  paymentLabel: { flex: 1, fontSize: 14, fontWeight: '600', color: COLORS.textMuted },
-  paymentLabelActive: { color: COLORS.primary },
-  radio: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: COLORS.border, alignItems: 'center', justifyContent: 'center' },
-  radioActive: { borderColor: COLORS.primary },
-  radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: COLORS.primary },
-  onlineNote: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginTop: SPACING.sm, backgroundColor: '#E3F2FD', borderRadius: RADIUS.md, padding: SPACING.sm },
-  onlineNoteText: { fontSize: 12, color: COLORS.info },
   billRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: SPACING.sm },
   billKey: { fontSize: 13, color: COLORS.textMuted },
   billVal: { fontSize: 13, fontWeight: '600', color: COLORS.text },
@@ -237,6 +239,6 @@ const styles = StyleSheet.create({
   footerTotal: { fontSize: 20, fontWeight: '800', color: COLORS.text },
   footerLabel: { fontSize: 12, color: COLORS.textMuted },
   placeOrderBtn: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, backgroundColor: COLORS.primary, paddingHorizontal: SPACING.xl, paddingVertical: SPACING.md, borderRadius: RADIUS.lg },
-  placeOrderBtnDisabled: { opacity: 0.7 },
-  placeOrderText: { color: COLORS.white, fontWeight: '800', fontSize: 16 },
+  btnDisabled: { opacity: 0.65 },
+  placeOrderText: { color: COLORS.white, fontWeight: '800', fontSize: 15 },
 });
