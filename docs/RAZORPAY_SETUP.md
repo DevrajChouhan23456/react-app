@@ -1,73 +1,63 @@
-# Razorpay Integration Guide
+# Razorpay Setup Guide (WebView — Expo 55 Compatible)
 
-## 1. Get your API Keys
+## Why WebView?
 
-1. Sign up at [https://dashboard.razorpay.com](https://dashboard.razorpay.com)
-2. Go to **Settings → API Keys**
-3. Generate test keys for development
-4. Copy `Key ID` and `Key Secret`
+`react-native-razorpay` does NOT support New Architecture (React 19 / Expo 55).
+This app uses Razorpay Web Checkout embedded in a WebView — zero native modules,
+works perfectly with Expo Go and development builds.
 
 ---
 
-## 2. Install the React Native SDK
+## 1. Install the only required package
 
 ```bash
-npx expo install react-native-razorpay
-
-# Then rebuild (required — this is a native module)
-npx expo run:android
-# OR
-npx expo run:ios
+npx expo install react-native-webview
 ```
 
-> ⚠️ Razorpay uses native code — it does NOT work with Expo Go.
-> You must use a **development build** or production APK.
+That's it. No other Razorpay package needed.
 
 ---
 
-## 3. Add your Key ID to the app
+## 2. Get your Razorpay API Keys
 
-Edit `services/razorpayService.ts`:
+1. Sign up at https://dashboard.razorpay.com
+2. Settings → API Keys → Generate Test Key
+3. Copy Key ID and Key Secret
 
-```ts
-export const RAZORPAY_KEY_ID = 'rzp_test_YOUR_KEY_HERE';
-```
+---
 
-Or better — use an environment variable:
+## 3. Add keys to your .env file
 
-Create `.env` in the project root:
+Create `.env` in project root:
 ```
 EXPO_PUBLIC_RAZORPAY_KEY_ID=rzp_test_YOUR_KEY_HERE
-EXPO_PUBLIC_API_URL=https://your-backend.com/api
+EXPO_PUBLIC_API_URL=http://10.0.2.2:3001/api
 ```
 
-Then in `razorpayService.ts`:
-```ts
-export const RAZORPAY_KEY_ID = process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID!;
-```
+> Note: `10.0.2.2` is Android emulator's localhost.
+> For real device, use your PC's local IP: `http://192.168.x.x:3001/api`
 
 ---
 
-## 4. Set up the Backend
+## 4. Backend setup
 
 The backend routes are in `backend/payments/razorpay.js`.
 
-### Install dependencies:
 ```bash
-npm install razorpay crypto express
+cd backend
+npm install razorpay express
 ```
 
-### Add to your Express app:
+Add to your Express app:
 ```js
 const paymentRoutes = require('./payments/razorpay');
 app.use('/api/payments', paymentRoutes);
 ```
 
-### Add environment variables to backend `.env`:
+Add to backend `.env`:
 ```
 RAZORPAY_KEY_ID=rzp_test_XXXXXXXXXXXXXXXX
 RAZORPAY_KEY_SECRET=XXXXXXXXXXXXXXXXXXXXXXXX
-RAZORPAY_WEBHOOK_SECRET=your_webhook_secret
 ```
 
 ---
@@ -75,43 +65,48 @@ RAZORPAY_WEBHOOK_SECRET=your_webhook_secret
 ## 5. Payment Flow
 
 ```
-User taps "Pay ₹180"
+User taps "Pay ₹180 Online"
     ↓
-App calls backend POST /api/payments/create-order
+App calls backend → POST /api/payments/create-order
     ↓
 Backend creates Razorpay order → returns order_id
     ↓
-App opens Razorpay checkout sheet (UPI / Card / Netbanking)
+App opens RazorpayWebView (Modal with WebView)
     ↓
-User completes payment
+Razorpay Web Checkout loads inside WebView
     ↓
-App calls backend POST /api/payments/verify
+User pays via UPI / Card / Netbanking
     ↓
-Backend verifies HMAC signature → confirms payment
+WebView sends message → App receives payment result
+    ↓
+App calls backend → POST /api/payments/verify (HMAC check)
     ↓
 Order placed → navigates to Order Tracking
 ```
 
 ---
 
-## 6. Test Cards
+## 6. Test Credentials
 
-| Card Number        | Expiry | CVV | Result  |
-|--------------------|--------|-----|---------|
+### Test Cards
+| Card Number         | Expiry | CVV | Result  |
+|---------------------|--------|-----|---------|
 | 4111 1111 1111 1111 | Any    | Any | Success |
-| 5267 3181 8797 5449 | Any    | Any | Success |
 | 4000 0000 0000 0002 | Any    | Any | Failure |
 
 ### Test UPI
-- UPI ID: `success@razorpay` → Payment success
-- UPI ID: `failure@razorpay` → Payment failure
+- `success@razorpay` → Success
+- `failure@razorpay` → Failure
+
+### Test Netbanking
+- Select any bank → Use test credentials shown on page
 
 ---
 
 ## 7. Go Live Checklist
 
-- [ ] Replace `rzp_test_` keys with `rzp_live_` keys
-- [ ] Enable required payment methods in Razorpay Dashboard
-- [ ] Set up webhook URL in Dashboard → Settings → Webhooks
-- [ ] Test with real ₹1 transaction before launch
-- [ ] Enable GST invoice in Razorpay Dashboard if needed
+- [ ] Replace `rzp_test_` key with `rzp_live_` key
+- [ ] Enable payment methods in Razorpay Dashboard
+- [ ] Set webhook URL: Dashboard → Settings → Webhooks
+- [ ] Test with real ₹1 transaction
+- [ ] Add GST info to your Razorpay account
