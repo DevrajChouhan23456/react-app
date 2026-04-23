@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "Dal Bafla",
+    "slug": "dal-bafla-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "dalbafla",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#FF6B00"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.dalbafla.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#FF6B00"
+      },
+      "package": "com.dalbafla.app"
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static"
+    },
+    "plugins": ["expo-router"],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
