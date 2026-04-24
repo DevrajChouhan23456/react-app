@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Alert } from 'react-native';
 import {
+  assertRazorpayCheckoutConfigured,
   createRazorpayOrder,
   verifyRazorpayPayment,
 } from '@/services/razorpayService';
@@ -34,6 +35,7 @@ export function useRazorpay() {
   // Step 1 — called from checkout screen
   const initiatePayment = async (options: RazorpayPaymentOptions) => {
     try {
+      assertRazorpayCheckoutConfigured();
       setStatus('creating_order');
       setError(null);
       setPendingOptions(options);
@@ -53,7 +55,7 @@ export function useRazorpay() {
     } catch (err: any) {
       setStatus('failed');
       setError(err.message);
-      Alert.alert('Error', 'Could not initiate payment. Please try again.');
+      Alert.alert('Payment unavailable', err.message || 'Could not initiate payment. Please try again.');
     }
   };
 
@@ -82,7 +84,7 @@ export function useRazorpay() {
     } catch (err: any) {
       setStatus('failed');
       setError(err.message);
-      Alert.alert('Payment Error', 'Could not verify payment. Contact support.');
+      Alert.alert('Payment Error', err.message || 'Could not verify payment. Contact support.');
     }
   };
 

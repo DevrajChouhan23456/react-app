@@ -36,6 +36,7 @@ EXPO_PUBLIC_API_URL=http://10.0.2.2:3001/api
 
 > Note: `10.0.2.2` is Android emulator's localhost.
 > For real device, use your PC's local IP: `http://192.168.x.x:3001/api`
+> If you leave `EXPO_PUBLIC_API_URL` unset, the app now auto-detects the Expo host and uses port `3001`.
 
 ---
 
@@ -46,6 +47,8 @@ The backend routes are in `backend/payments/razorpay.js`.
 ```bash
 cd backend
 npm install razorpay express
+npm install dotenv
+npm start
 ```
 
 Add to your Express app:
@@ -59,6 +62,8 @@ Add to backend `.env`:
 RAZORPAY_KEY_ID=rzp_test_XXXXXXXXXXXXXXXX
 RAZORPAY_KEY_SECRET=XXXXXXXXXXXXXXXXXXXXXXXX
 ```
+
+You can copy `backend/.env.example` to `backend/.env` and fill in your test keys.
 
 ---
 

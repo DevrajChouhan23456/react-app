@@ -1,6 +1,7 @@
 import axios from 'axios';
+import { getApiBaseUrl } from '@/services/apiConfig';
 
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001/api';
+const BASE_URL = getApiBaseUrl();
 
 const api = axios.create({
   baseURL: BASE_URL,

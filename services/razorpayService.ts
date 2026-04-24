@@ -1,8 +1,9 @@
-// Razorpay Web Checkout via WebView — works with Expo 55 + React 19
+// Razorpay Web Checkout via WebView - works with Expo 55 + React 19
 // No native module needed. Just react-native-webview.
+import { getApiBaseUrl, getApiSetupHint } from '@/services/apiConfig';
 
 export const RAZORPAY_KEY_ID = process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID || 'rzp_test_XXXXXXXXXXXXXXXX';
-const BACKEND_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:3001/api';
+const BACKEND_URL = getApiBaseUrl();
 
 export interface RazorpayOrderPayload {
   amount: number; // in paise
@@ -19,15 +20,46 @@ export interface RazorpayOrderResponse {
   status: string;
 }
 
+async function readErrorMessage(response: Response, fallback: string) {
+  const text = await response.text();
+
+  if (!text) return fallback;
+
+  try {
+    const data = JSON.parse(text);
+    if (typeof data?.error === 'string') return data.error;
+    if (typeof data?.message === 'string') return data.message;
+    return fallback;
+  } catch {
+    return text;
+  }
+}
+
+export function assertRazorpayCheckoutConfigured() {
+  if (!RAZORPAY_KEY_ID || RAZORPAY_KEY_ID.includes('XXXXXXXXXXXXXXXX')) {
+    throw new Error('Set EXPO_PUBLIC_RAZORPAY_KEY_ID in react-app/.env before using online payments.');
+  }
+}
+
 export async function createRazorpayOrder(
   payload: RazorpayOrderPayload
 ): Promise<RazorpayOrderResponse> {
-  const res = await fetch(`${BACKEND_URL}/payments/create-order`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw new Error('Failed to create Razorpay order');
+  let res: Response;
+
+  try {
+    res = await fetch(`${BACKEND_URL}/payments/create-order`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    throw new Error(getApiSetupHint());
+  }
+
+  if (!res.ok) {
+    throw new Error(await readErrorMessage(res, 'Failed to create Razorpay order'));
+  }
+
   return res.json();
 }
 
@@ -36,12 +68,22 @@ export async function verifyRazorpayPayment(result: {
   razorpay_order_id: string;
   razorpay_signature: string;
 }): Promise<{ verified: boolean }> {
-  const res = await fetch(`${BACKEND_URL}/payments/verify`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(result),
-  });
-  if (!res.ok) throw new Error('Payment verification failed');
+  let res: Response;
+
+  try {
+    res = await fetch(`${BACKEND_URL}/payments/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(result),
+    });
+  } catch {
+    throw new Error(getApiSetupHint());
+  }
+
+  if (!res.ok) {
+    throw new Error(await readErrorMessage(res, 'Payment verification failed'));
+  }
+
   return res.json();
 }
 

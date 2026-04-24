@@ -54,7 +54,7 @@ export default function OrderTrackingScreen() {
     <SafeAreaView style={styles.safe}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.push('/(tabs)/index')} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => router.push('/')} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={22} color={COLORS.text} />
         </TouchableOpacity>
         <View style={styles.headerTitle}>

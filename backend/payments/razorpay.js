@@ -14,23 +14,37 @@ const crypto = require('crypto');
 
 const router = express.Router();
 
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID,
-  key_secret: process.env.RAZORPAY_KEY_SECRET,
-});
+function readEnv(name) {
+  return (process.env[name] || '').trim();
+}
+
+function hasRazorpayCredentials() {
+  return Boolean(readEnv('RAZORPAY_KEY_ID') && readEnv('RAZORPAY_KEY_SECRET'));
+}
+
+function getRazorpayClient() {
+  return new Razorpay({
+    key_id: readEnv('RAZORPAY_KEY_ID'),
+    key_secret: readEnv('RAZORPAY_KEY_SECRET'),
+  });
+}
 
 // POST /api/payments/create-order
 // Creates a Razorpay order on the backend
 router.post('/create-order', async (req, res) => {
   try {
+    if (!hasRazorpayCredentials()) {
+      return res.status(500).json({ error: 'Razorpay keys are missing on the backend server.' });
+    }
+
     const { amount, currency = 'INR', receipt, notes } = req.body;
 
     if (!amount || amount < 100) {
-      return res.status(400).json({ error: 'Invalid amount. Minimum is ₹1 (100 paise).' });
+      return res.status(400).json({ error: 'Invalid amount. Minimum is Rs 1 (100 paise).' });
     }
 
-    const order = await razorpay.orders.create({
-      amount,       // in paise
+    const order = await getRazorpayClient().orders.create({
+      amount, // in paise
       currency,
       receipt,
       notes,
@@ -47,11 +61,15 @@ router.post('/create-order', async (req, res) => {
 // Verifies Razorpay payment signature
 router.post('/verify', (req, res) => {
   try {
+    if (!hasRazorpayCredentials()) {
+      return res.status(500).json({ error: 'Razorpay keys are missing on the backend server.' });
+    }
+
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
 
     const body = razorpay_order_id + '|' + razorpay_payment_id;
     const expectedSignature = crypto
-      .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+      .createHmac('sha256', readEnv('RAZORPAY_KEY_SECRET'))
       .update(body)
       .digest('hex');
 
@@ -72,7 +90,7 @@ router.post('/verify', (req, res) => {
 // POST /api/payments/webhook
 // Handle Razorpay webhooks (payment.captured, payment.failed, etc.)
 router.post('/webhook', express.raw({ type: 'application/json' }), (req, res) => {
-  const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
+  const webhookSecret = readEnv('RAZORPAY_WEBHOOK_SECRET');
   const signature = req.headers['x-razorpay-signature'];
 
   const expectedSignature = crypto
