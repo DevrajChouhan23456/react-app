@@ -1,12 +1,16 @@
 import os
-import razorpay
 
 RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID", "")
 RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET", "")
 
 client = None
 if RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET:
-    client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
+    try:
+        import razorpay
+
+        client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
+    except Exception:
+        client = None
 
 
 def create_razorpay_order(amount: int, currency: str, receipt: str):

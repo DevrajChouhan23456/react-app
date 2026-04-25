@@ -14,30 +14,32 @@ This backend powers the **Dal Bafla React Native app**.
 ## 1. Create Python environment
 
 ```bash
+# Skip this if your prompt is already inside backend/
 cd backend
-python -m venv .venv
 ```
 
 ### Windows
 ```bash
-.venv\Scripts\activate
+py -m venv .venv
 ```
 
 ### macOS / Linux
 ```bash
-source .venv/bin/activate
+python -m venv .venv
 ```
 
 ## 2. Install dependencies
 
 ```bash
-pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
 ## 3. Add environment variables
 
-```bash
-cp .env.example .env
+If `.env` does not already exist:
+
+```powershell
+Copy-Item .env.example .env
 ```
 
 Fill these values in `.env`:
@@ -112,7 +114,7 @@ create policy "Read order_items" on public.order_items
 ## 5. Run the server
 
 ```bash
-uvicorn main:app --reload --port 3001
+.\.venv\Scripts\python.exe -m uvicorn main:app --reload --port 3001
 ```
 
 ## 6. Open API docs
