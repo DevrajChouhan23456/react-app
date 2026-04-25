@@ -1,0 +1,14 @@
+# FastAPI backend for Dal Bafla app
+fastapi==0.115.12
+uvicorn[standard]==0.34.2
+pydantic==2.11.4
+python-dotenv==1.1.0
+supabase==2.15.1
+razorpay==1.4.2
+httpx==0.28.1
+sqlalchemy==2.0.40
+psycopg2-binary==2.9.10
+python-multipart==0.0.20
+pandas==2.2.3
+numpy==2.2.5
+python-jose[cryptography]==3.3.0
