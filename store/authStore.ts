@@ -1,6 +1,13 @@
 import { create } from 'zustand';
 import { supabase } from '@/lib/supabase';
-import { Session, User } from '@supabase/supabase-js';
+import { Session } from '@supabase/supabase-js';
+
+// ─── DEV MODE ────────────────────────────────────────────────────────────────
+// Supabase phone OTP requires a paid SMS provider (Twilio/Vonage).
+// In dev mode, any phone number works and OTP is always "123456".
+// To switch to real SMS: set EXPO_PUBLIC_DEV_AUTH=false and configure
+// Supabase → Authentication → Providers → Phone → enable + add Twilio/Vonage.
+const DEV_AUTH = process.env.EXPO_PUBLIC_DEV_AUTH !== 'false';
 
 interface Address {
   id: string;
@@ -27,7 +34,6 @@ interface AuthState {
   otpSent: boolean;
   error: string | null;
 
-  // Actions
   sendOtp: (phone: string) => Promise<void>;
   verifyOtp: (phone: string, token: string) => Promise<boolean>;
   updateProfile: (name: string, email?: string) => Promise<void>;
@@ -48,7 +54,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   sendOtp: async (phone: string) => {
     set({ loading: true, error: null });
     try {
-      // Format: +91XXXXXXXXXX
+      if (DEV_AUTH) {
+        // Dev mode: simulate OTP sent — no real SMS needed
+        // Use OTP "123456" on the next screen
+        await new Promise((r) => setTimeout(r, 800)); // simulate network delay
+        set({ otpSent: true, loading: false });
+        return;
+      }
+
+      // Production: real Supabase phone OTP
       const formatted = phone.startsWith('+') ? phone : `+91${phone}`;
       const { error } = await supabase.auth.signInWithOtp({ phone: formatted });
       if (error) throw error;
@@ -61,6 +75,26 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   verifyOtp: async (phone: string, token: string) => {
     set({ loading: true, error: null });
     try {
+      if (DEV_AUTH) {
+        // Dev mode: accept "123456" as valid OTP
+        if (token !== '123456') {
+          set({ error: 'Dev mode: use OTP 123456', loading: false });
+          return false;
+        }
+        await new Promise((r) => setTimeout(r, 800));
+
+        const devUser: AppUser = {
+          id: 'dev-user-' + phone,
+          phone: `+91${phone}`,
+          name: '',
+          email: '',
+          addresses: [],
+        };
+        set({ user: devUser, loading: false, otpSent: false });
+        return true; // true = needs profile setup
+      }
+
+      // Production: real Supabase OTP verify
       const formatted = phone.startsWith('+') ? phone : `+91${phone}`;
       const { data, error } = await supabase.auth.verifyOtp({
         phone: formatted,
@@ -72,7 +106,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const session = data.session;
       const supaUser = data.user;
 
-      // Fetch or create profile in DB
       const { data: profile } = await supabase
         .from('profiles')
         .select('*')
@@ -88,7 +121,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       };
 
       set({ session, user: appUser, loading: false, otpSent: false });
-      return !profile?.name; // true = needs profile setup
+      return !profile?.name;
     } catch (err: any) {
       set({ error: err.message || 'Invalid OTP', loading: false });
       return false;
@@ -101,13 +134,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const { user } = get();
       if (!user) throw new Error('Not logged in');
 
-      await supabase.from('profiles').upsert({
-        id: user.id,
-        name,
-        email: email || '',
-        phone: user.phone,
-        updated_at: new Date().toISOString(),
-      });
+      if (!DEV_AUTH) {
+        await supabase.from('profiles').upsert({
+          id: user.id,
+          name,
+          email: email || '',
+          phone: user.phone,
+          updated_at: new Date().toISOString(),
+        });
+      }
 
       set((s) => ({
         user: s.user ? { ...s.user, name, email } : null,
@@ -120,6 +155,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   loadSession: async () => {
     set({ loading: true });
+    if (DEV_AUTH) {
+      // In dev mode, check if user is already in store
+      set({ loading: false });
+      return;
+    }
     const { data: { session } } = await supabase.auth.getSession();
     if (session?.user) {
       const { data: profile } = await supabase
@@ -145,7 +185,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   signOut: async () => {
-    await supabase.auth.signOut();
+    if (!DEV_AUTH) await supabase.auth.signOut();
     set({ session: null, user: null, otpSent: false });
   },
 
