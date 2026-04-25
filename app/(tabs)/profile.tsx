@@ -8,7 +8,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, RADIUS, SHADOW } from '@/constants/theme';
 import { useAuthStore } from '@/store/authStore';
 import { useOrderStore } from '@/store/orderStore';
-import { useRouter } from 'expo-router';
 
 const MenuItem = ({ icon, label, value, onPress, danger }: any) => (
   <TouchableOpacity style={styles.menuItem} onPress={onPress}>
@@ -24,14 +23,13 @@ const MenuItem = ({ icon, label, value, onPress, danger }: any) => (
 );
 
 export default function ProfileScreen() {
-  const { user, logout } = useAuthStore();
+  const { user, signOut } = useAuthStore();
   const { orders } = useOrderStore();
-  const router = useRouter();
 
   const handleLogout = () => {
     Alert.alert('Logout', 'Are you sure you want to logout?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Logout', style: 'destructive', onPress: logout },
+      { text: 'Logout', style: 'destructive', onPress: () => { void signOut(); } },
     ]);
   };
 
