@@ -1,33 +1,44 @@
 {
   "expo": {
-    "name": "Dal Bafla",
+    "name": "Gau Stories - Dal Bafla",
     "slug": "dal-bafla-app",
     "version": "1.0.0",
     "orientation": "portrait",
+    "icon": "./assets/icon.png",
     "scheme": "dalbafla",
-    "icon": "./assets/images/icon.png",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
+    "platforms": ["ios", "android", "web"],
     "splash": {
+      "image": "./assets/splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#FF6B00"
-    },
-    "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.dalbafla.app"
-    },
-    "android": {
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#FF6B00"
-      },
-      "package": "com.dalbafla.app"
     },
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "name": "Gau Stories - Dal Bafla",
+      "shortName": "Dal Bafla",
+      "description": "Authentic Dal Bafla delivered in Bhopal",
+      "themeColor": "#FF6B00",
+      "backgroundColor": "#FFF8F3"
     },
-    "plugins": ["expo-router"],
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.gaustories.dalbafla"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FF6B00"
+      },
+      "package": "com.gaustories.dalbafla"
+    },
+    "plugins": [
+      "expo-router",
+      ["expo-font", { "fonts": [] }]
+    ],
     "experiments": {
       "typedRoutes": true
     }

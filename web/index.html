@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+
+  <title>Gau Stories — Dal Bafla Bhopal</title>
+  <meta name="description" content="Authentic Dal Bafla delivered fresh in Bhopal. Order now!" />
+  <meta name="theme-color" content="#FF6B00" />
+
+  <!-- PWA manifest -->
+  <link rel="manifest" href="/manifest.json" />
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="/assets/favicon.png" />
+  <link rel="apple-touch-icon" href="/assets/icon.png" />
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="Gau Stories — Dal Bafla Bhopal" />
+  <meta property="og:description" content="Authentic Dal Bafla delivered fresh in Bhopal" />
+  <meta property="og:type" content="website" />
+
+  <style>
+    /* Prevent white flash on load */
+    html, body, #root { height: 100%; margin: 0; padding: 0; background: #FFF8F3; }
+
+    /* Mobile-like container on desktop */
+    @media (min-width: 768px) {
+      body { display: flex; justify-content: center; align-items: flex-start;
+             background: #f0ebe4; min-height: 100vh; }
+      #root { width: 390px; min-height: 100vh; box-shadow: 0 0 60px rgba(0,0,0,0.15);
+              background: #FFF8F3; position: relative; overflow: hidden; }
+    }
+
+    /* Loading spinner */
+    .web-loader {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; background: #FFF8F3; z-index: 9999;
+    }
+    .web-loader-emoji { font-size: 56px; margin-bottom: 16px;
+      animation: bounce 1s ease-in-out infinite alternate; }
+    .web-loader-text { font-size: 18px; font-weight: 700;
+      color: #FF6B00; font-family: -apple-system, sans-serif; }
+    .web-loader-sub { font-size: 13px; color: #999; margin-top: 6px;
+      font-family: -apple-system, sans-serif; }
+    @keyframes bounce { from { transform: translateY(0); } to { transform: translateY(-12px); } }
+  </style>
+</head>
+<body>
+  <!-- Loading screen -->
+  <div class="web-loader" id="web-loader">
+    <div class="web-loader-emoji">🍲</div>
+    <div class="web-loader-text">Gau Stories</div>
+    <div class="web-loader-sub">Dal Bafla • Bhopal</div>
+  </div>
+
+  <div id="root"></div>
+
+  <script>
+    // Hide loader once React mounts
+    window.__onAppMounted = function() {
+      var loader = document.getElementById('web-loader');
+      if (loader) {
+        loader.style.opacity = '0';
+        loader.style.transition = 'opacity 0.3s ease';
+        setTimeout(function() { loader.remove(); }, 300);
+      }
+    };
+  </script>
+</body>
+</html>
