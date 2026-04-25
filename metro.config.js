@@ -4,13 +4,21 @@ const exclusionList =
 
 const config = getDefaultConfig(__dirname);
 
-// Add web support
-config.resolver.platforms = ['web', 'native', 'ios', 'android'];
+// Platforms — Android/iOS must be resolved before web
+config.resolver.platforms = ['android', 'ios', 'native', 'web'];
 
-// Support for .web.js/.web.ts extensions
+// IMPORTANT: native extensions must come BEFORE web extensions.
+// If web.js is listed first, Metro picks RNLinking.web.js on Android too,
+// causing "window.addEventListener is not a function" errors.
 config.resolver.sourceExts = [
-  'web.js', 'web.jsx', 'web.ts', 'web.tsx',
-  ...config.resolver.sourceExts,
+  ...config.resolver.sourceExts.filter(
+    (ext) => !ext.startsWith('web')
+  ),
+  // web extensions last — only used when platform === 'web'
+  'web.js',
+  'web.jsx',
+  'web.ts',
+  'web.tsx',
 ];
 
 // Ignore backend temp/cache folders that Metro should never try to crawl.
