@@ -1,12 +1,14 @@
 import { create } from 'zustand';
-import { supabase } from '@/lib/supabase';
 import { Session } from '@supabase/supabase-js';
+import { getApiBaseUrl } from '@/services/apiConfig';
 
-// ─── DEV MODE ────────────────────────────────────────────────────────────────
-// Supabase phone OTP requires a paid SMS provider (Twilio/Vonage).
-// In dev mode, any phone number works and OTP is always "123456".
-// To switch to real SMS: set EXPO_PUBLIC_DEV_AUTH=false and configure
-// Supabase → Authentication → Providers → Phone → enable + add Twilio/Vonage.
+// ── MSG91 OTP via our FastAPI backend ────────────────────────────────────────
+// Frontend never calls MSG91 directly — calls our own backend /api/auth/*
+// Backend env: MSG91_DEV_MODE=true  → OTP printed to server console (no SMS)
+//              MSG91_DEV_MODE=false → real SMS via MSG91
+// Frontend env: EXPO_PUBLIC_DEV_AUTH=true → backend returns dev_otp in response
+//               EXPO_PUBLIC_DEV_AUTH=false → no dev_otp exposed
+
 const DEV_AUTH = process.env.EXPO_PUBLIC_DEV_AUTH !== 'false';
 
 interface Address {
@@ -33,6 +35,7 @@ interface AuthState {
   loading: boolean;
   otpSent: boolean;
   error: string | null;
+  devOtp: string | null; // only in dev mode — shown as hint
 
   sendOtp: (phone: string) => Promise<void>;
   verifyOtp: (phone: string, token: string) => Promise<boolean>;
@@ -44,84 +47,58 @@ interface AuthState {
   setDefaultAddress: (id: string) => void;
 }
 
+async function backendPost(path: string, body: object) {
+  const base = getApiBaseUrl().replace(/\/api$/, ''); // strip trailing /api
+  const res = await fetch(`${base}/api${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  return res.json();
+}
+
 export const useAuthStore = create<AuthState>((set, get) => ({
   session: null,
   user: null,
   loading: false,
   otpSent: false,
   error: null,
+  devOtp: null,
 
   sendOtp: async (phone: string) => {
-    set({ loading: true, error: null });
+    set({ loading: true, error: null, devOtp: null });
     try {
-      if (DEV_AUTH) {
-        // Dev mode: simulate OTP sent — no real SMS needed
-        // Use OTP "123456" on the next screen
-        await new Promise((r) => setTimeout(r, 800)); // simulate network delay
-        set({ otpSent: true, loading: false });
-        return;
-      }
-
-      // Production: real Supabase phone OTP
-      const formatted = phone.startsWith('+') ? phone : `+91${phone}`;
-      const { error } = await supabase.auth.signInWithOtp({ phone: formatted });
-      if (error) throw error;
-      set({ otpSent: true, loading: false });
+      const data = await backendPost('/auth/send-otp', { phone });
+      if (!data.success) throw new Error(data.message || 'Failed to send OTP');
+      set({
+        otpSent: true,
+        loading: false,
+        // In dev mode, backend returns the OTP so you can see it on screen
+        devOtp: DEV_AUTH ? (data.dev_otp ?? null) : null,
+      });
     } catch (err: any) {
-      set({ error: err.message || 'Failed to send OTP', loading: false });
+      set({
+        error: err.message || 'Could not reach server. Is the backend running?',
+        loading: false,
+      });
     }
   },
 
   verifyOtp: async (phone: string, token: string) => {
     set({ loading: true, error: null });
     try {
-      if (DEV_AUTH) {
-        // Dev mode: accept "123456" as valid OTP
-        if (token !== '123456') {
-          set({ error: 'Dev mode: use OTP 123456', loading: false });
-          return false;
-        }
-        await new Promise((r) => setTimeout(r, 800));
-
-        const devUser: AppUser = {
-          id: 'dev-user-' + phone,
-          phone: `+91${phone}`,
-          name: '',
-          email: '',
-          addresses: [],
-        };
-        set({ user: devUser, loading: false, otpSent: false });
-        return true; // true = needs profile setup
-      }
-
-      // Production: real Supabase OTP verify
-      const formatted = phone.startsWith('+') ? phone : `+91${phone}`;
-      const { data, error } = await supabase.auth.verifyOtp({
-        phone: formatted,
-        token,
-        type: 'sms',
-      });
-      if (error) throw error;
-
-      const session = data.session;
-      const supaUser = data.user;
-
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', supaUser?.id)
-        .single();
+      const data = await backendPost('/auth/verify-otp', { phone, otp: token });
+      if (!data.success) throw new Error(data.message || 'Invalid OTP');
 
       const appUser: AppUser = {
-        id: supaUser?.id || '',
-        phone: formatted,
-        name: profile?.name || '',
-        email: profile?.email || '',
-        addresses: profile?.addresses || [],
+        id: data.user_id,
+        phone: data.phone,
+        name: '',
+        email: '',
+        addresses: [],
       };
-
-      set({ session, user: appUser, loading: false, otpSent: false });
-      return !profile?.name;
+      set({ user: appUser, loading: false, otpSent: false, devOtp: null });
+      return true; // needs profile setup
     } catch (err: any) {
       set({ error: err.message || 'Invalid OTP', loading: false });
       return false;
@@ -131,19 +108,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   updateProfile: async (name: string, email?: string) => {
     set({ loading: true, error: null });
     try {
-      const { user } = get();
-      if (!user) throw new Error('Not logged in');
-
-      if (!DEV_AUTH) {
-        await supabase.from('profiles').upsert({
-          id: user.id,
-          name,
-          email: email || '',
-          phone: user.phone,
-          updated_at: new Date().toISOString(),
-        });
-      }
-
       set((s) => ({
         user: s.user ? { ...s.user, name, email } : null,
         loading: false,
@@ -154,39 +118,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   loadSession: async () => {
-    set({ loading: true });
-    if (DEV_AUTH) {
-      // In dev mode, check if user is already in store
-      set({ loading: false });
-      return;
-    }
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.user) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', session.user.id)
-        .single();
-
-      set({
-        session,
-        user: {
-          id: session.user.id,
-          phone: session.user.phone || '',
-          name: profile?.name || '',
-          email: profile?.email || '',
-          addresses: profile?.addresses || [],
-        },
-        loading: false,
-      });
-    } else {
-      set({ session: null, user: null, loading: false });
-    }
+    // Session is in-memory only for now (AsyncStorage can be added later)
+    set({ loading: false });
   },
 
   signOut: async () => {
-    if (!DEV_AUTH) await supabase.auth.signOut();
-    set({ session: null, user: null, otpSent: false });
+    set({ session: null, user: null, otpSent: false, devOtp: null });
   },
 
   clearError: () => set({ error: null }),

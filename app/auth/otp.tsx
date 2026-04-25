@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, ActivityIndicator, KeyboardAvoidingView,
-  Platform, Alert,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -15,13 +15,12 @@ const OTP_LENGTH = 6;
 export default function OtpScreen() {
   const router = useRouter();
   const { phone } = useLocalSearchParams<{ phone: string }>();
-  const { verifyOtp, sendOtp, loading, error, clearError } = useAuthStore();
+  const { verifyOtp, sendOtp, loading, error, clearError, devOtp } = useAuthStore();
 
   const [otp, setOtp] = useState(Array(OTP_LENGTH).fill(''));
   const [timer, setTimer] = useState(30);
   const inputRefs = useRef<(TextInput | null)[]>([]);
 
-  // Countdown timer
   useEffect(() => {
     if (timer <= 0) return;
     const interval = setInterval(() => setTimer((t) => t - 1), 1000);
@@ -32,16 +31,13 @@ export default function OtpScreen() {
     clearError();
     const cleaned = val.replace(/\D/g, '');
     const newOtp = [...otp];
-
     if (cleaned.length > 1) {
-      // Handle paste
       const chars = cleaned.slice(0, OTP_LENGTH).split('');
       chars.forEach((c, i) => { if (i < OTP_LENGTH) newOtp[i] = c; });
       setOtp(newOtp);
       inputRefs.current[Math.min(chars.length, OTP_LENGTH - 1)]?.focus();
       return;
     }
-
     newOtp[idx] = cleaned;
     setOtp(newOtp);
     if (cleaned && idx < OTP_LENGTH - 1) inputRefs.current[idx + 1]?.focus();
@@ -77,6 +73,13 @@ export default function OtpScreen() {
     await sendOtp(phone);
   };
 
+  // Auto-fill OTP boxes when devOtp is available
+  useEffect(() => {
+    if (devOtp && devOtp.length === OTP_LENGTH) {
+      setOtp(devOtp.split(''));
+    }
+  }, [devOtp]);
+
   const isComplete = otp.every((d) => d !== '');
   const maskedPhone = `+91 XXXXX X${phone?.slice(-4)}`;
 
@@ -100,6 +103,16 @@ export default function OtpScreen() {
               <Text style={styles.phoneText}>{maskedPhone}</Text>
             </Text>
           </View>
+
+          {/* Dev mode hint */}
+          {devOtp ? (
+            <View style={styles.devBanner}>
+              <Ionicons name="code-slash" size={14} color="#92400e" />
+              <Text style={styles.devText}>
+                Dev mode — OTP auto-filled: <Text style={{ fontWeight: '800' }}>{devOtp}</Text>
+              </Text>
+            </View>
+          ) : null}
 
           {/* OTP Boxes */}
           <View style={styles.otpRow}>
@@ -157,7 +170,6 @@ export default function OtpScreen() {
             )}
           </View>
 
-          {/* Change number */}
           <TouchableOpacity style={styles.changeNumber} onPress={() => router.back()}>
             <Ionicons name="pencil" size={13} color={COLORS.primary} />
             <Text style={styles.changeNumberText}>Change mobile number</Text>
@@ -172,7 +184,7 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.bg },
   container: { flex: 1, padding: SPACING.base },
   backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', marginBottom: SPACING.sm },
-  header: { alignItems: 'center', marginBottom: SPACING.xl },
+  header: { alignItems: 'center', marginBottom: SPACING.lg },
   otpIcon: {
     width: 72, height: 72, borderRadius: 36,
     backgroundColor: COLORS.secondary, alignItems: 'center',
@@ -181,6 +193,13 @@ const styles = StyleSheet.create({
   heading: { fontSize: 24, fontWeight: '800', color: COLORS.text, marginBottom: SPACING.sm },
   subheading: { fontSize: 14, color: COLORS.textMuted, textAlign: 'center', lineHeight: 22 },
   phoneText: { fontWeight: '700', color: COLORS.text },
+  devBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: '#fef3c7', borderRadius: RADIUS.md,
+    padding: SPACING.sm, marginBottom: SPACING.base,
+    borderWidth: 1, borderColor: '#fcd34d',
+  },
+  devText: { fontSize: 12, color: '#92400e' },
   otpRow: { flexDirection: 'row', justifyContent: 'center', gap: SPACING.sm, marginBottom: SPACING.base },
   otpBox: {
     width: 48, height: 56, borderRadius: RADIUS.md,
