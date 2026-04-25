@@ -4,19 +4,19 @@
     "slug": "dal-bafla-app",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/images/icon.png",
     "scheme": "dalbafla",
     "userInterfaceStyle": "light",
     "platforms": ["ios", "android", "web"],
     "splash": {
-      "image": "./assets/splash.png",
+      "image": "./assets/images/icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#FF6B00"
     },
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/favicon.png",
+      "favicon": "./assets/images/favicon.png",
       "name": "Gau Stories - Dal Bafla",
       "shortName": "Dal Bafla",
       "description": "Authentic Dal Bafla delivered in Bhopal",
@@ -30,7 +30,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#FF6B00"
       },
       "package": "com.gaustories.dalbafla"
