@@ -33,14 +33,11 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#FF6B00"
       },
-      "package": "com.gaustories.dalbafla",
-      "googleServicesFile": "./google-services.json"
+      "package": "com.gaustories.dalbafla"
     },
     "plugins": [
       "expo-router",
-      ["expo-font", { "fonts": [] }],
-      "@react-native-firebase/app",
-      "@react-native-firebase/auth"
+      ["expo-font", { "fonts": [] }]
     ],
     "experiments": {
       "typedRoutes": true

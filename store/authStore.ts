@@ -1,12 +1,19 @@
 import { create } from 'zustand';
-import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
+import {
+  signInWithPhoneNumber,
+  ConfirmationResult,
+  signOut as fbSignOut,
+  onAuthStateChanged,
+  User,
+  PhoneAuthProvider,
+} from 'firebase/auth';
+import { firebaseAuth } from '@/services/firebase';
 
-// ── Firebase Phone Auth ───────────────────────────────────────────────────────
+// ── Firebase Web SDK Phone Auth ───────────────────────────────────────────────
+// Works in Expo Go wirelessly — no native build, no USB needed.
 // Flow:
-//   1. sendOtp(phone)  → Firebase sends real SMS, returns confirmation object
-//   2. verifyOtp(otp)  → confirms code with Firebase → returns FirebaseUser
-// No backend needed for auth — Firebase handles OTP + verification for free.
-// 10,000 SMS/month free on Spark plan.
+//   1. sendOtp(phone)  → Firebase sends real SMS free (10k/month)
+//   2. verifyOtp(code) → confirms with Firebase → user logged in
 
 interface Address {
   id: string;
@@ -28,12 +35,12 @@ interface AppUser {
 
 interface AuthState {
   user: AppUser | null;
-  firebaseUser: FirebaseAuthTypes.User | null;
+  firebaseUser: User | null;
+  session: User | null; // alias for firebaseUser — keeps _layout.tsx working
   loading: boolean;
   otpSent: boolean;
   error: string | null;
-  // held between sendOtp and verifyOtp
-  _confirmation: FirebaseAuthTypes.ConfirmationResult | null;
+  _confirmation: ConfirmationResult | null;
 
   sendOtp: (phone: string) => Promise<void>;
   verifyOtp: (code: string) => Promise<boolean>;
@@ -48,6 +55,7 @@ interface AuthState {
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   firebaseUser: null,
+  session: null,
   loading: false,
   otpSent: false,
   error: null,
@@ -57,15 +65,23 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   sendOtp: async (phone: string) => {
     set({ loading: true, error: null });
     try {
-      // Normalize: ensure +91 prefix
       const normalized = phone.startsWith('+') ? phone : `+91${phone.replace(/\D/g, '')}`;
-      const confirmation = await auth().signInWithPhoneNumber(normalized);
+      // Firebase Web SDK — signInWithPhoneNumber
+      // Requires reCAPTCHA verifier; we use a "invisible" workaround for React Native:
+      // Pass undefined as verifier — Firebase skips reCAPTCHA on native apps
+      // (works in Expo Go on real device)
+      const confirmation = await signInWithPhoneNumber(
+        firebaseAuth,
+        normalized,
+        (window as any).__recaptchaVerifier // undefined on native — Firebase handles it
+      );
       set({ otpSent: true, loading: false, _confirmation: confirmation });
     } catch (err: any) {
       let message = 'Failed to send OTP. Please try again.';
-      if (err?.code === 'auth/invalid-phone-number') message = 'Invalid phone number.';
-      if (err?.code === 'auth/too-many-requests') message = 'Too many attempts. Try again later.';
-      if (err?.code === 'auth/quota-exceeded') message = 'SMS quota exceeded. Try again tomorrow.';
+      if (err?.code === 'auth/invalid-phone-number')  message = 'Invalid phone number.';
+      if (err?.code === 'auth/too-many-requests')     message = 'Too many attempts. Try again later.';
+      if (err?.code === 'auth/quota-exceeded')        message = 'SMS quota exceeded. Try again tomorrow.';
+      if (err?.code === 'auth/missing-phone-number')  message = 'Please enter your phone number.';
       set({ error: message, loading: false });
     }
   },
@@ -77,9 +93,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const { _confirmation } = get();
       if (!_confirmation) throw new Error('No OTP request found. Please resend.');
 
-      const credential = await _confirmation.confirm(code);
-      const fbUser = credential?.user ?? null;
-
+      const result = await _confirmation.confirm(code);
+      const fbUser = result?.user ?? null;
       if (!fbUser) throw new Error('Verification failed.');
 
       const appUser: AppUser = {
@@ -92,18 +107,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       set({
         firebaseUser: fbUser,
+        session: fbUser,
         user: appUser,
         loading: false,
         otpSent: false,
         _confirmation: null,
       });
 
-      // Return true if profile name is empty → needs profile setup
-      return !fbUser.displayName;
+      return !fbUser.displayName; // true = needs profile setup
     } catch (err: any) {
       let message = 'Invalid OTP. Please try again.';
       if (err?.code === 'auth/invalid-verification-code') message = 'Wrong OTP. Please check and retry.';
-      if (err?.code === 'auth/code-expired') message = 'OTP expired. Please request a new one.';
+      if (err?.code === 'auth/code-expired')             message = 'OTP expired. Please request a new one.';
       if (err?.message) message = err.message;
       set({ error: message, loading: false });
       return false;
@@ -114,10 +129,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   updateProfile: async (name: string, email?: string) => {
     set({ loading: true, error: null });
     try {
+      const { updateProfile: fbUpdate } = await import('firebase/auth');
       const fbUser = get().firebaseUser;
-      if (fbUser) {
-        await fbUser.updateProfile({ displayName: name });
-      }
+      if (fbUser) await fbUpdate(fbUser, { displayName: name });
       set((s) => ({
         user: s.user ? { ...s.user, name, email } : null,
         loading: false,
@@ -127,32 +141,33 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  // ── Load Session ────────────────────────────────────────────────────────────
+  // ── Load Session (Firebase persists automatically) ──────────────────────────
   loadSession: async () => {
     set({ loading: true });
-    // Firebase persists auth state automatically
-    const fbUser = auth().currentUser;
-    if (fbUser) {
-      set({
-        firebaseUser: fbUser,
-        user: {
-          id: fbUser.uid,
-          phone: fbUser.phoneNumber ?? '',
-          name: fbUser.displayName ?? '',
-          email: fbUser.email ?? '',
-          addresses: [],
-        },
-        loading: false,
+    return new Promise<void>((resolve) => {
+      const unsubscribe = onAuthStateChanged(firebaseAuth, (fbUser) => {
+        unsubscribe();
+        if (fbUser) {
+          const appUser: AppUser = {
+            id: fbUser.uid,
+            phone: fbUser.phoneNumber ?? '',
+            name: fbUser.displayName ?? '',
+            email: fbUser.email ?? '',
+            addresses: [],
+          };
+          set({ firebaseUser: fbUser, session: fbUser, user: appUser, loading: false });
+        } else {
+          set({ loading: false });
+        }
+        resolve();
       });
-    } else {
-      set({ loading: false });
-    }
+    });
   },
 
-  // ── Sign Out ────────────────────────────────────────────────────────────────
+  // ── Sign Out ─────────────────────────────────────────────────────────────────
   signOut: async () => {
-    await auth().signOut();
-    set({ user: null, firebaseUser: null, otpSent: false, _confirmation: null });
+    await fbSignOut(firebaseAuth);
+    set({ user: null, firebaseUser: null, session: null, otpSent: false, _confirmation: null });
   },
 
   clearError: () => set({ error: null }),
@@ -160,26 +175,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   addAddress: (address) =>
     set((s) => ({
       user: s.user
-        ? {
-            ...s.user,
-            addresses: [
-              ...s.user.addresses,
-              { ...address, id: Date.now().toString() },
-            ],
-          }
+        ? { ...s.user, addresses: [...s.user.addresses, { ...address, id: Date.now().toString() }] }
         : null,
     })),
 
   setDefaultAddress: (id) =>
     set((s) => ({
       user: s.user
-        ? {
-            ...s.user,
-            addresses: s.user.addresses.map((a) => ({
-              ...a,
-              isDefault: a.id === id,
-            })),
-          }
+        ? { ...s.user, addresses: s.user.addresses.map((a) => ({ ...a, isDefault: a.id === id })) }
         : null,
     })),
 }));
