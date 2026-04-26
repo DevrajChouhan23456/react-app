@@ -34,7 +34,7 @@
         "backgroundColor": "#FF6B00"
       },
       "package": "com.gaustories.dalbafla",
-      "googleServicesFile": "./android/app/google-services.json"
+      "googleServicesFile": "./google-services.json"
     },
     "plugins": [
       "expo-router",
