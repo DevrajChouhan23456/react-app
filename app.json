@@ -42,7 +42,14 @@
         "expo-font",
         { "fonts": [] }
       ],
-      "@react-native-firebase/app",
+      [
+        "@react-native-firebase/app",
+        {
+          "android": {
+            "googleServicesFile": "./google-services.json"
+          }
+        }
+      ],
       "@react-native-firebase/auth"
     ],
     "experiments": {
