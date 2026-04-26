@@ -1,15 +1,12 @@
 import { create } from 'zustand';
-import { Session } from '@supabase/supabase-js';
-import { getApiBaseUrl } from '@/services/apiConfig';
+import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
 
-// ── MSG91 OTP via our FastAPI backend ────────────────────────────────────────
-// Frontend never calls MSG91 directly — calls our own backend /api/auth/*
-// Backend env: MSG91_DEV_MODE=true  → OTP printed to server console (no SMS)
-//              MSG91_DEV_MODE=false → real SMS via MSG91
-// Frontend env: EXPO_PUBLIC_DEV_AUTH=true → backend returns dev_otp in response
-//               EXPO_PUBLIC_DEV_AUTH=false → no dev_otp exposed
-
-const DEV_AUTH = process.env.EXPO_PUBLIC_DEV_AUTH !== 'false';
+// ── Firebase Phone Auth ───────────────────────────────────────────────────────
+// Flow:
+//   1. sendOtp(phone)  → Firebase sends real SMS, returns confirmation object
+//   2. verifyOtp(otp)  → confirms code with Firebase → returns FirebaseUser
+// No backend needed for auth — Firebase handles OTP + verification for free.
+// 10,000 SMS/month free on Spark plan.
 
 interface Address {
   id: string;
@@ -30,15 +27,16 @@ interface AppUser {
 }
 
 interface AuthState {
-  session: Session | null;
   user: AppUser | null;
+  firebaseUser: FirebaseAuthTypes.User | null;
   loading: boolean;
   otpSent: boolean;
   error: string | null;
-  devOtp: string | null; // only in dev mode — shown as hint
+  // held between sendOtp and verifyOtp
+  _confirmation: FirebaseAuthTypes.ConfirmationResult | null;
 
   sendOtp: (phone: string) => Promise<void>;
-  verifyOtp: (phone: string, token: string) => Promise<boolean>;
+  verifyOtp: (code: string) => Promise<boolean>;
   updateProfile: (name: string, email?: string) => Promise<void>;
   loadSession: () => Promise<void>;
   signOut: () => Promise<void>;
@@ -47,67 +45,79 @@ interface AuthState {
   setDefaultAddress: (id: string) => void;
 }
 
-async function backendPost(path: string, body: object) {
-  const base = getApiBaseUrl().replace(/\/api$/, ''); // strip trailing /api
-  const res = await fetch(`${base}/api${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  return res.json();
-}
-
 export const useAuthStore = create<AuthState>((set, get) => ({
-  session: null,
   user: null,
+  firebaseUser: null,
   loading: false,
   otpSent: false,
   error: null,
-  devOtp: null,
+  _confirmation: null,
 
+  // ── Send OTP ────────────────────────────────────────────────────────────────
   sendOtp: async (phone: string) => {
-    set({ loading: true, error: null, devOtp: null });
+    set({ loading: true, error: null });
     try {
-      const data = await backendPost('/auth/send-otp', { phone });
-      if (!data.success) throw new Error(data.message || 'Failed to send OTP');
-      set({
-        otpSent: true,
-        loading: false,
-        // In dev mode, backend returns the OTP so you can see it on screen
-        devOtp: DEV_AUTH ? (data.dev_otp ?? null) : null,
-      });
+      // Normalize: ensure +91 prefix
+      const normalized = phone.startsWith('+') ? phone : `+91${phone.replace(/\D/g, '')}`;
+      const confirmation = await auth().signInWithPhoneNumber(normalized);
+      set({ otpSent: true, loading: false, _confirmation: confirmation });
     } catch (err: any) {
-      set({
-        error: err.message || 'Could not reach server. Is the backend running?',
-        loading: false,
-      });
+      let message = 'Failed to send OTP. Please try again.';
+      if (err?.code === 'auth/invalid-phone-number') message = 'Invalid phone number.';
+      if (err?.code === 'auth/too-many-requests') message = 'Too many attempts. Try again later.';
+      if (err?.code === 'auth/quota-exceeded') message = 'SMS quota exceeded. Try again tomorrow.';
+      set({ error: message, loading: false });
     }
   },
 
-  verifyOtp: async (phone: string, token: string) => {
+  // ── Verify OTP ──────────────────────────────────────────────────────────────
+  verifyOtp: async (code: string) => {
     set({ loading: true, error: null });
     try {
-      const data = await backendPost('/auth/verify-otp', { phone, otp: token });
-      if (!data.success) throw new Error(data.message || 'Invalid OTP');
+      const { _confirmation } = get();
+      if (!_confirmation) throw new Error('No OTP request found. Please resend.');
+
+      const credential = await _confirmation.confirm(code);
+      const fbUser = credential?.user ?? null;
+
+      if (!fbUser) throw new Error('Verification failed.');
 
       const appUser: AppUser = {
-        id: data.user_id,
-        phone: data.phone,
-        name: '',
-        email: '',
+        id: fbUser.uid,
+        phone: fbUser.phoneNumber ?? '',
+        name: fbUser.displayName ?? '',
+        email: fbUser.email ?? '',
         addresses: [],
       };
-      set({ user: appUser, loading: false, otpSent: false, devOtp: null });
-      return true; // needs profile setup
+
+      set({
+        firebaseUser: fbUser,
+        user: appUser,
+        loading: false,
+        otpSent: false,
+        _confirmation: null,
+      });
+
+      // Return true if profile name is empty → needs profile setup
+      return !fbUser.displayName;
     } catch (err: any) {
-      set({ error: err.message || 'Invalid OTP', loading: false });
+      let message = 'Invalid OTP. Please try again.';
+      if (err?.code === 'auth/invalid-verification-code') message = 'Wrong OTP. Please check and retry.';
+      if (err?.code === 'auth/code-expired') message = 'OTP expired. Please request a new one.';
+      if (err?.message) message = err.message;
+      set({ error: message, loading: false });
       return false;
     }
   },
 
+  // ── Update Profile ──────────────────────────────────────────────────────────
   updateProfile: async (name: string, email?: string) => {
     set({ loading: true, error: null });
     try {
+      const fbUser = get().firebaseUser;
+      if (fbUser) {
+        await fbUser.updateProfile({ displayName: name });
+      }
       set((s) => ({
         user: s.user ? { ...s.user, name, email } : null,
         loading: false,
@@ -117,18 +127,37 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
+  // ── Load Session ────────────────────────────────────────────────────────────
   loadSession: async () => {
-    // Session is in-memory only for now (AsyncStorage can be added later)
-    set({ loading: false });
+    set({ loading: true });
+    // Firebase persists auth state automatically
+    const fbUser = auth().currentUser;
+    if (fbUser) {
+      set({
+        firebaseUser: fbUser,
+        user: {
+          id: fbUser.uid,
+          phone: fbUser.phoneNumber ?? '',
+          name: fbUser.displayName ?? '',
+          email: fbUser.email ?? '',
+          addresses: [],
+        },
+        loading: false,
+      });
+    } else {
+      set({ loading: false });
+    }
   },
 
+  // ── Sign Out ────────────────────────────────────────────────────────────────
   signOut: async () => {
-    set({ session: null, user: null, otpSent: false, devOtp: null });
+    await auth().signOut();
+    set({ user: null, firebaseUser: null, otpSent: false, _confirmation: null });
   },
 
   clearError: () => set({ error: null }),
 
-  addAddress: (address) => {
+  addAddress: (address) =>
     set((s) => ({
       user: s.user
         ? {
@@ -139,10 +168,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             ],
           }
         : null,
-    }));
-  },
+    })),
 
-  setDefaultAddress: (id) => {
+  setDefaultAddress: (id) =>
     set((s) => ({
       user: s.user
         ? {
@@ -153,6 +181,5 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             })),
           }
         : null,
-    }));
-  },
+    })),
 }));

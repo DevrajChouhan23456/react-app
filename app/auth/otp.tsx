@@ -15,7 +15,8 @@ const OTP_LENGTH = 6;
 export default function OtpScreen() {
   const router = useRouter();
   const { phone } = useLocalSearchParams<{ phone: string }>();
-  const { verifyOtp, sendOtp, loading, error, clearError, devOtp } = useAuthStore();
+  // verifyOtp now only takes the code — confirmation is held in store
+  const { verifyOtp, sendOtp, loading, error, clearError } = useAuthStore();
 
   const [otp, setOtp] = useState(Array(OTP_LENGTH).fill(''));
   const [timer, setTimer] = useState(30);
@@ -55,7 +56,8 @@ export default function OtpScreen() {
   const handleVerify = async () => {
     const code = otp.join('');
     if (code.length < OTP_LENGTH) return;
-    const needsProfile = await verifyOtp(phone, code);
+    // verifyOtp returns true if profile setup is needed
+    const needsProfile = await verifyOtp(code);
     const { error: err } = useAuthStore.getState();
     if (!err) {
       if (needsProfile) {
@@ -72,13 +74,6 @@ export default function OtpScreen() {
     clearError();
     await sendOtp(phone);
   };
-
-  // Auto-fill OTP boxes when devOtp is available
-  useEffect(() => {
-    if (devOtp && devOtp.length === OTP_LENGTH) {
-      setOtp(devOtp.split(''));
-    }
-  }, [devOtp]);
 
   const isComplete = otp.every((d) => d !== '');
   const maskedPhone = `+91 XXXXX X${phone?.slice(-4)}`;
@@ -102,17 +97,8 @@ export default function OtpScreen() {
               We sent a 6-digit code to{`\n`}
               <Text style={styles.phoneText}>{maskedPhone}</Text>
             </Text>
+            <Text style={styles.poweredBy}>🔥 Powered by Firebase</Text>
           </View>
-
-          {/* Dev mode hint */}
-          {devOtp ? (
-            <View style={styles.devBanner}>
-              <Ionicons name="code-slash" size={14} color="#92400e" />
-              <Text style={styles.devText}>
-                Dev mode — OTP auto-filled: <Text style={{ fontWeight: '800' }}>{devOtp}</Text>
-              </Text>
-            </View>
-          ) : null}
 
           {/* OTP Boxes */}
           <View style={styles.otpRow}>
@@ -193,13 +179,7 @@ const styles = StyleSheet.create({
   heading: { fontSize: 24, fontWeight: '800', color: COLORS.text, marginBottom: SPACING.sm },
   subheading: { fontSize: 14, color: COLORS.textMuted, textAlign: 'center', lineHeight: 22 },
   phoneText: { fontWeight: '700', color: COLORS.text },
-  devBanner: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: '#fef3c7', borderRadius: RADIUS.md,
-    padding: SPACING.sm, marginBottom: SPACING.base,
-    borderWidth: 1, borderColor: '#fcd34d',
-  },
-  devText: { fontSize: 12, color: '#92400e' },
+  poweredBy: { fontSize: 11, color: COLORS.textMuted, marginTop: SPACING.sm },
   otpRow: { flexDirection: 'row', justifyContent: 'center', gap: SPACING.sm, marginBottom: SPACING.base },
   otpBox: {
     width: 48, height: 56, borderRadius: RADIUS.md,
