@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "138888046856",
+    "project_id": "dal-bhaffle-app",
+    "storage_bucket": "dal-bhaffle-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:138888046856:android:5b325af3c22ef3f317a4bd",
+        "android_client_info": {
+          "package_name": "com.gaustories.dalbafla"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAYL7EXGPyk9xCQWKxkiG5tzc9O9GXL1K0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

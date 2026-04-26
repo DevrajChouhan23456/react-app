@@ -1,18 +1,10 @@
 import { create } from 'zustand';
-import {
-  signInWithPhoneNumber,
-  ConfirmationResult,
-  signOut as fbSignOut,
-  onAuthStateChanged,
-  User,
-  PhoneAuthProvider,
-} from 'firebase/auth';
-import { firebaseAuth } from '@/services/firebase';
+import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
 
-// ── Firebase Web SDK Phone Auth ───────────────────────────────────────────────
-// Works in Expo Go wirelessly — no native build, no USB needed.
+// ── @react-native-firebase Phone Auth ─────────────────────────────────────────
+// No reCAPTCHA verifier needed — native SDK handles it automatically.
 // Flow:
-//   1. sendOtp(phone)  → Firebase sends real SMS free (10k/month)
+//   1. sendOtp(phone)  → Firebase sends real SMS
 //   2. verifyOtp(code) → confirms with Firebase → user logged in
 
 interface Address {
@@ -35,12 +27,12 @@ interface AppUser {
 
 interface AuthState {
   user: AppUser | null;
-  firebaseUser: User | null;
-  session: User | null; // alias for firebaseUser — keeps _layout.tsx working
+  firebaseUser: FirebaseAuthTypes.User | null;
+  session: FirebaseAuthTypes.User | null;
   loading: boolean;
   otpSent: boolean;
   error: string | null;
-  _confirmation: ConfirmationResult | null;
+  _confirmation: FirebaseAuthTypes.ConfirmationResult | null;
 
   sendOtp: (phone: string) => Promise<void>;
   verifyOtp: (code: string) => Promise<boolean>;
@@ -66,15 +58,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ loading: true, error: null });
     try {
       const normalized = phone.startsWith('+') ? phone : `+91${phone.replace(/\D/g, '')}`;
-      // Firebase Web SDK — signInWithPhoneNumber
-      // Requires reCAPTCHA verifier; we use a "invisible" workaround for React Native:
-      // Pass undefined as verifier — Firebase skips reCAPTCHA on native apps
-      // (works in Expo Go on real device)
-      const confirmation = await signInWithPhoneNumber(
-        firebaseAuth,
-        normalized,
-        (window as any).__recaptchaVerifier // undefined on native — Firebase handles it
-      );
+      // @react-native-firebase handles reCAPTCHA natively — no verifier needed
+      const confirmation = await auth().signInWithPhoneNumber(normalized);
       set({ otpSent: true, loading: false, _confirmation: confirmation });
     } catch (err: any) {
       let message = 'Failed to send OTP. Please try again.';
@@ -129,9 +114,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   updateProfile: async (name: string, email?: string) => {
     set({ loading: true, error: null });
     try {
-      const { updateProfile: fbUpdate } = await import('firebase/auth');
-      const fbUser = get().firebaseUser;
-      if (fbUser) await fbUpdate(fbUser, { displayName: name });
+      const fbUser = auth().currentUser;
+      if (fbUser) await fbUser.updateProfile({ displayName: name });
       set((s) => ({
         user: s.user ? { ...s.user, name, email } : null,
         loading: false,
@@ -141,11 +125,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  // ── Load Session (Firebase persists automatically) ──────────────────────────
+  // ── Load Session ─────────────────────────────────────────────────────────────
   loadSession: async () => {
     set({ loading: true });
     return new Promise<void>((resolve) => {
-      const unsubscribe = onAuthStateChanged(firebaseAuth, (fbUser) => {
+      const unsubscribe = auth().onAuthStateChanged((fbUser) => {
         unsubscribe();
         if (fbUser) {
           const appUser: AppUser = {
@@ -164,9 +148,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     });
   },
 
-  // ── Sign Out ─────────────────────────────────────────────────────────────────
+  // ── Sign Out ──────────────────────────────────────────────────────────────────
   signOut: async () => {
-    await fbSignOut(firebaseAuth);
+    await auth().signOut();
     set({ user: null, firebaseUser: null, session: null, otpSent: false, _confirmation: null });
   },
 
