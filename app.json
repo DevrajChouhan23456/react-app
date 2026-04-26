@@ -7,7 +7,11 @@
     "icon": "./assets/images/icon.png",
     "scheme": "dalbafla",
     "userInterfaceStyle": "light",
-    "platforms": ["ios", "android", "web"],
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ],
     "splash": {
       "image": "./assets/images/icon.png",
       "resizeMode": "contain",
@@ -23,7 +27,9 @@
       "themeColor": "#FF6B00",
       "backgroundColor": "#FFF8F3"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.gaustories.dalbafla"
@@ -37,7 +43,14 @@
     },
     "plugins": [
       "expo-router",
-      ["expo-font", { "fonts": [] }]
+      [
+        "expo-font",
+        {
+          "fonts": []
+        }
+      ],
+      "@react-native-firebase/app",
+      "@react-native-firebase/auth"
     ],
     "experiments": {
       "typedRoutes": true
