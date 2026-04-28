@@ -1,11 +1,11 @@
 import { create } from 'zustand';
-import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
+import { getApiBaseUrl } from '@/services/apiConfig';
 
-// ── @react-native-firebase Phone Auth ─────────────────────────────────────────
-// No reCAPTCHA verifier needed — native SDK handles it automatically.
+// ── Backend OTP Auth ──────────────────────────────────────────────────────────
 // Flow:
-//   1. sendOtp(phone)  → Firebase sends real SMS
-//   2. verifyOtp(code) → confirms with Firebase → user logged in
+//   1. sendOtp(phone)  → POST /api/auth/send-otp  → backend sends SMS via MSG91
+//   2. verifyOtp(code) → POST /api/auth/verify-otp → backend verifies → returns user
+// No Firebase, no billing, no reCAPTCHA.
 
 interface Address {
   id: string;
@@ -27,12 +27,11 @@ interface AppUser {
 
 interface AuthState {
   user: AppUser | null;
-  firebaseUser: FirebaseAuthTypes.User | null;
-  session: FirebaseAuthTypes.User | null;
+  session: AppUser | null;
   loading: boolean;
   otpSent: boolean;
   error: string | null;
-  _confirmation: FirebaseAuthTypes.ConfirmationResult | null;
+  devOtp: string | null; // shown in dev mode only
 
   sendOtp: (phone: string) => Promise<void>;
   verifyOtp: (code: string) => Promise<boolean>;
@@ -44,30 +43,47 @@ interface AuthState {
   setDefaultAddress: (id: string) => void;
 }
 
+// Simple in-memory session store (no localStorage — sandbox safe)
+let _sessionUser: AppUser | null = null;
+let _pendingPhone: string = '';
+
 export const useAuthStore = create<AuthState>((set, get) => ({
-  user: null,
-  firebaseUser: null,
-  session: null,
+  user: _sessionUser,
+  session: _sessionUser,
   loading: false,
   otpSent: false,
   error: null,
-  _confirmation: null,
+  devOtp: null,
 
   // ── Send OTP ────────────────────────────────────────────────────────────────
   sendOtp: async (phone: string) => {
-    set({ loading: true, error: null });
+    set({ loading: true, error: null, devOtp: null });
     try {
-      const normalized = phone.startsWith('+') ? phone : `+91${phone.replace(/\D/g, '')}`;
-      // @react-native-firebase handles reCAPTCHA natively — no verifier needed
-      const confirmation = await auth().signInWithPhoneNumber(normalized);
-      set({ otpSent: true, loading: false, _confirmation: confirmation });
+      const normalized = phone.replace(/\D/g, '');
+      _pendingPhone = normalized;
+
+      const res = await fetch(`${getApiBaseUrl()}/auth/send-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: normalized }),
+      });
+
+      const data = await res.json();
+
+      if (!data.success) {
+        set({ error: data.message || 'Failed to send OTP. Please try again.', loading: false });
+        return;
+      }
+
+      set({
+        otpSent: true,
+        loading: false,
+        // dev_otp is only present when MSG91_DEV_MODE=true on backend
+        devOtp: data.dev_otp ?? null,
+      });
     } catch (err: any) {
-      let message = 'Failed to send OTP. Please try again.';
-      if (err?.code === 'auth/invalid-phone-number')  message = 'Invalid phone number.';
-      if (err?.code === 'auth/too-many-requests')     message = 'Too many attempts. Try again later.';
-      if (err?.code === 'auth/quota-exceeded')        message = 'SMS quota exceeded. Try again tomorrow.';
-      if (err?.code === 'auth/missing-phone-number')  message = 'Please enter your phone number.';
-      set({ error: message, loading: false });
+      console.log('🔴 sendOtp error:', err?.message);
+      set({ error: 'Could not reach server. Is the backend running?', loading: false });
     }
   },
 
@@ -75,37 +91,40 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   verifyOtp: async (code: string) => {
     set({ loading: true, error: null });
     try {
-      const { _confirmation } = get();
-      if (!_confirmation) throw new Error('No OTP request found. Please resend.');
+      const res = await fetch(`${getApiBaseUrl()}/auth/verify-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: _pendingPhone, otp: code }),
+      });
 
-      const result = await _confirmation.confirm(code);
-      const fbUser = result?.user ?? null;
-      if (!fbUser) throw new Error('Verification failed.');
+      const data = await res.json();
+
+      if (!data.success) {
+        set({ error: data.message || 'Invalid OTP. Please try again.', loading: false });
+        return false;
+      }
 
       const appUser: AppUser = {
-        id: fbUser.uid,
-        phone: fbUser.phoneNumber ?? '',
-        name: fbUser.displayName ?? '',
-        email: fbUser.email ?? '',
+        id: data.user_id,
+        phone: data.phone,
+        name: '',
+        email: '',
         addresses: [],
       };
 
+      _sessionUser = appUser;
       set({
-        firebaseUser: fbUser,
-        session: fbUser,
         user: appUser,
+        session: appUser,
         loading: false,
         otpSent: false,
-        _confirmation: null,
+        devOtp: null,
       });
 
-      return !fbUser.displayName; // true = needs profile setup
+      return !appUser.name; // true = needs profile setup
     } catch (err: any) {
-      let message = 'Invalid OTP. Please try again.';
-      if (err?.code === 'auth/invalid-verification-code') message = 'Wrong OTP. Please check and retry.';
-      if (err?.code === 'auth/code-expired')             message = 'OTP expired. Please request a new one.';
-      if (err?.message) message = err.message;
-      set({ error: message, loading: false });
+      console.log('🔴 verifyOtp error:', err?.message);
+      set({ error: 'Could not reach server. Is the backend running?', loading: false });
       return false;
     }
   },
@@ -114,12 +133,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   updateProfile: async (name: string, email?: string) => {
     set({ loading: true, error: null });
     try {
-      const fbUser = auth().currentUser;
-      if (fbUser) await fbUser.updateProfile({ displayName: name });
       set((s) => ({
         user: s.user ? { ...s.user, name, email } : null,
         loading: false,
       }));
+      if (_sessionUser) _sessionUser = { ..._sessionUser, name, email };
     } catch (err: any) {
       set({ error: err.message, loading: false });
     }
@@ -127,31 +145,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   // ── Load Session ─────────────────────────────────────────────────────────────
   loadSession: async () => {
-    set({ loading: true });
-    return new Promise<void>((resolve) => {
-      const unsubscribe = auth().onAuthStateChanged((fbUser) => {
-        unsubscribe();
-        if (fbUser) {
-          const appUser: AppUser = {
-            id: fbUser.uid,
-            phone: fbUser.phoneNumber ?? '',
-            name: fbUser.displayName ?? '',
-            email: fbUser.email ?? '',
-            addresses: [],
-          };
-          set({ firebaseUser: fbUser, session: fbUser, user: appUser, loading: false });
-        } else {
-          set({ loading: false });
-        }
-        resolve();
-      });
-    });
+    // Restore in-memory session if available
+    set({ user: _sessionUser, session: _sessionUser, loading: false });
   },
 
   // ── Sign Out ──────────────────────────────────────────────────────────────────
   signOut: async () => {
-    await auth().signOut();
-    set({ user: null, firebaseUser: null, session: null, otpSent: false, _confirmation: null });
+    _sessionUser = null;
+    _pendingPhone = '';
+    set({ user: null, session: null, otpSent: false, devOtp: null });
   },
 
   clearError: () => set({ error: null }),
