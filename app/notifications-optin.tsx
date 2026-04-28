@@ -1,33 +1,17 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import * as Notifications from 'expo-notifications';
 import { useRouter } from 'expo-router';
 import { COLORS, SPACING, RADIUS, SHADOW } from '@/constants/theme';
 
+// Note: We keep this screen purely UI-only while you are using Expo Go.
+// Expo Go on SDK 53 no longer supports remote push notifications via expo-notifications.
+// When you build a development client, we can re-introduce the real permission logic.
+
 export default function NotificationsOptInScreen() {
   const router = useRouter();
-  const [busy, setBusy] = useState(false);
 
-  const handleEnable = async () => {
-    try {
-      setBusy(true);
-      const { status: existingStatus } = await Notifications.getPermissionsAsync();
-      let finalStatus = existingStatus;
-
-      if (existingStatus !== 'granted') {
-        const { status } = await Notifications.requestPermissionsAsync();
-        finalStatus = status;
-      }
-
-      // We don't block the user if they decline – just continue
-      router.replace('/(tabs)');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const handleSkip = () => {
+  const goHome = () => {
     router.replace('/(tabs)');
   };
 
@@ -40,19 +24,18 @@ export default function NotificationsOptInScreen() {
 
         <Text style={styles.title}>Get updates on your order status</Text>
         <Text style={styles.subtitle}>
-          Allow push notifications to get real-time updates on your Dal Bafla orders.
+          Turn on notifications in your device settings later to get real-time updates on your Dal Bafla orders.
         </Text>
 
         <TouchableOpacity
-          style={[styles.primaryBtn, busy && { opacity: 0.7 }]}
-          onPress={handleEnable}
-          disabled={busy}
+          style={styles.primaryBtn}
+          onPress={goHome}
           activeOpacity={0.85}
         >
-          <Text style={styles.primaryText}>{busy ? 'Enabling…' : 'Turn on Notifications'}</Text>
+          <Text style={styles.primaryText}>Continue</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={handleSkip} style={styles.skipBtn}>
+        <TouchableOpacity onPress={goHome} style={styles.skipBtn}>
           <Text style={styles.skipText}>Not now</Text>
         </TouchableOpacity>
       </View>
