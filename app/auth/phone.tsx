@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, ActivityIndicator, KeyboardAvoidingView,
-  Platform, ScrollView, Alert,
+  Platform, ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -28,6 +28,11 @@ export default function PhoneScreen() {
     }
   };
 
+  const handleSkip = () => {
+    // Guest flow: go through notifications opt-in before home
+    router.replace('/notifications-optin');
+  };
+
   return (
     <SafeAreaView style={styles.safe}>
       <KeyboardAvoidingView
@@ -35,6 +40,11 @@ export default function PhoneScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+          {/* Top Skip */}
+          <TouchableOpacity style={styles.skipTop} onPress={handleSkip} activeOpacity={0.7}>
+            <Text style={styles.skipTopText}>Skip</Text>
+          </TouchableOpacity>
+
           {/* Logo / Branding */}
           <View style={styles.brandBox}>
             <View style={styles.logoCircle}>
@@ -114,6 +124,8 @@ export default function PhoneScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.bg },
   scroll: { flexGrow: 1, padding: SPACING.base, justifyContent: 'center' },
+  skipTop: { position: 'absolute', top: SPACING.lg, right: SPACING.base, zIndex: 5 },
+  skipTopText: { fontSize: 14, fontWeight: '600', color: COLORS.textMuted },
   brandBox: { alignItems: 'center', marginBottom: SPACING.xl },
   logoCircle: {
     width: 80, height: 80, borderRadius: 40,
