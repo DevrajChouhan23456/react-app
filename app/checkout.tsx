@@ -43,33 +43,47 @@ export default function CheckoutScreen() {
     return paymentMethod === 'cod' ? 'Place Order (COD)' : `Pay ₹${total} Online`;
   };
 
-  const finalizeOrder = (paymentId?: string) => {
-    placeOrder({
-      items: items.map((i: any) => ({
-        id: i.id,
-        name: i.name,
-        price: i.price,
-        quantity: i.quantity,
-        addons: i.selectedAddons,
-      })),
-      status: 'placed',
-      total,
-      address: defaultAddress
-        ? `${defaultAddress.line1}, ${defaultAddress.area}, ${defaultAddress.city}`
-        : 'Bhopal, MP',
-      paymentMethod,
-      estimatedTime: '30-40 min',
-    });
-    clearCart();
-    setLoading(false);
-    router.replace('/order-tracking');
+  // ── Finalize: save to Firestore via orderStore ───────────────────────────────
+  const finalizeOrder = async (paymentId?: string) => {
+    try {
+      await placeOrder({
+        userId: user?.id || 'guest',
+        items: items.map((i: any) => ({
+          id: i.id,
+          name: i.name,
+          price: i.price,
+          quantity: i.quantity,
+          image: i.image || '',
+          addons: i.selectedAddons.map((a: any) => ({ name: a.name, price: a.price })),
+        })),
+        status: 'placed',
+        total,
+        subtotal,
+        tax,
+        deliveryFee: DELIVERY_FEE,
+        discount: discount || 0,
+        coupon: coupon || null,
+        address: defaultAddress
+          ? `${defaultAddress.line1}, ${defaultAddress.area}, ${defaultAddress.city}`
+          : 'Bhopal, MP',
+        paymentMethod,
+        paymentId,
+        estimatedTime: '30-40 min',
+      });
+      clearCart();
+      setLoading(false);
+      router.replace('/order-tracking');
+    } catch (err) {
+      setLoading(false);
+      console.error('finalizeOrder error:', err);
+    }
   };
 
   const handlePlaceOrder = async () => {
     if (paymentMethod === 'cod') {
       setLoading(true);
-      await new Promise((r) => setTimeout(r, 1200));
-      finalizeOrder();
+      await new Promise((r) => setTimeout(r, 800));
+      await finalizeOrder();
     } else {
       await razorpay.initiatePayment({
         appOrderId: 'ORD-' + Date.now(),
@@ -125,12 +139,19 @@ export default function CheckoutScreen() {
 
         {/* Order Items */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Order Summary</Text>
+          <Text style={styles.sectionTitle}>Order Summary ({items.length} item{items.length !== 1 ? 's' : ''})</Text>
           <View style={styles.card}>
             {items.map((item: any) => (
               <View key={item.id} style={styles.orderItem}>
                 <Text style={styles.orderItemQty}>{item.quantity}×</Text>
-                <Text style={styles.orderItemName} numberOfLines={1}>{item.name}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.orderItemName} numberOfLines={1}>{item.name}</Text>
+                  {item.selectedAddons?.length > 0 && (
+                    <Text style={styles.addonText}>
+                      + {item.selectedAddons.map((a: any) => a.name).join(', ')}
+                    </Text>
+                  )}
+                </View>
                 <Text style={styles.orderItemPrice}>₹{item.price * item.quantity}</Text>
               </View>
             ))}
@@ -229,16 +250,17 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 12, fontWeight: '700', color: COLORS.textMuted, marginBottom: SPACING.sm, textTransform: 'uppercase', letterSpacing: 0.6 },
   card: { backgroundColor: COLORS.white, borderRadius: RADIUS.lg, padding: SPACING.base, ...SHADOW.sm },
   addressRow: { flexDirection: 'row', alignItems: 'flex-start', gap: SPACING.md },
-  addressIcon: { width: 40, height: 40, backgroundColor: COLORS.secondary, borderRadius: RADIUS.md, alignItems: 'center', justifyContent: 'center' },
+  addressIcon: { width: 40, height: 40, backgroundColor: COLORS.secondary || '#E8F5E9', borderRadius: RADIUS.md, alignItems: 'center', justifyContent: 'center' },
   addressBody: { flex: 1 },
   addressLabel: { fontSize: 14, fontWeight: '700', color: COLORS.text },
   addressText: { fontSize: 13, color: COLORS.textMuted, marginTop: 2, lineHeight: 18 },
   changeText: { fontSize: 13, fontWeight: '700', color: COLORS.primary },
   addAddressBtn: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, paddingVertical: SPACING.sm },
   addAddressText: { fontSize: 14, fontWeight: '600', color: COLORS.primary },
-  orderItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: SPACING.sm, borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  orderItem: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: SPACING.sm, borderBottomWidth: 1, borderBottomColor: COLORS.border },
   orderItemQty: { fontSize: 14, fontWeight: '700', color: COLORS.primary, width: 28 },
   orderItemName: { flex: 1, fontSize: 14, color: COLORS.text },
+  addonText: { fontSize: 11, color: COLORS.textMuted, marginTop: 2 },
   orderItemPrice: { fontSize: 14, fontWeight: '700', color: COLORS.text },
   billRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: SPACING.sm },
   billKey: { fontSize: 13, color: COLORS.textMuted },
