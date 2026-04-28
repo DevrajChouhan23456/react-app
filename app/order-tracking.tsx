@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
   StyleSheet,
@@ -9,30 +9,11 @@ import { useRouter } from 'expo-router';
 import { COLORS, SPACING, RADIUS, SHADOW } from '@/constants/theme';
 import { useOrderStore } from '@/store/orderStore';
 import OrderStatusStepper from '@/components/OrderStatusStepper';
-
-const STATUS_SEQUENCE = ['placed', 'accepted', 'preparing', 'out_for_delivery', 'delivered'] as const;
+import MapView, { Marker } from 'react-native-maps';
 
 export default function OrderTrackingScreen() {
   const router = useRouter();
-  const { activeOrder, updateOrderStatus } = useOrderStore();
-  const [elapsed, setElapsed] = useState(0);
-
-  // Auto-advance order status for demo
-  useEffect(() => {
-    if (!activeOrder || activeOrder.status === 'delivered') return;
-    const timer = setInterval(() => {
-      setElapsed((e) => e + 1);
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [activeOrder]);
-
-  useEffect(() => {
-    if (!activeOrder) return;
-    const currentIdx = STATUS_SEQUENCE.indexOf(activeOrder.status as any);
-    if (currentIdx < STATUS_SEQUENCE.length - 1 && elapsed > 0 && elapsed % 8 === 0) {
-      updateOrderStatus(activeOrder.id, STATUS_SEQUENCE[currentIdx + 1]);
-    }
-  }, [elapsed]);
+  const { activeOrder } = useOrderStore();
 
   if (!activeOrder) {
     return (
@@ -47,6 +28,17 @@ export default function OrderTrackingScreen() {
       </SafeAreaView>
     );
   }
+
+  const driverLat = (activeOrder as any).driverLat as number | undefined;
+  const driverLng = (activeOrder as any).driverLng as number | undefined;
+  const hasDriverLocation = typeof driverLat === 'number' && typeof driverLng === 'number';
+
+  const region = {
+    latitude: hasDriverLocation ? driverLat! : 23.2334, // Bhopal approx
+    longitude: hasDriverLocation ? driverLng! : 77.4336,
+    latitudeDelta: 0.02,
+    longitudeDelta: 0.02,
+  };
 
   const isDelivered = activeOrder.status === 'delivered';
 
@@ -84,6 +76,29 @@ export default function OrderTrackingScreen() {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Order Status</Text>
           <OrderStatusStepper currentStatus={activeOrder.status} />
+        </View>
+
+        {/* Live Map */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Live Location</Text>
+          <View style={styles.mapContainer}>
+            <MapView style={styles.map} initialRegion={region} region={region}>
+              {hasDriverLocation && (
+                <Marker
+                  coordinate={{ latitude: driverLat!, longitude: driverLng! }}
+                  title="Delivery partner"
+                  description="Your order is here"
+                />
+              )}
+            </MapView>
+            {!hasDriverLocation && (
+              <View style={styles.mapOverlay}>
+                <Text style={styles.mapOverlayText}>
+                  Driver location will appear here once the order is picked up.
+                </Text>
+              </View>
+            )}
+          </View>
         </View>
 
         {/* Delivery Address */}
@@ -162,6 +177,10 @@ const styles = StyleSheet.create({
   statusEta: { fontSize: 13, color: COLORS.white + 'CC', marginTop: 2 },
   card: { backgroundColor: COLORS.white, borderRadius: RADIUS.lg, padding: SPACING.base, marginHorizontal: SPACING.base, marginBottom: SPACING.base, ...SHADOW.sm },
   cardTitle: { fontSize: 15, fontWeight: '800', color: COLORS.text, marginBottom: SPACING.md },
+  mapContainer: { height: 220, borderRadius: RADIUS.lg, overflow: 'hidden' },
+  map: { flex: 1 },
+  mapOverlay: { position: 'absolute', bottom: 8, left: 12, right: 12, backgroundColor: COLORS.bg + 'CC', borderRadius: RADIUS.full, paddingHorizontal: SPACING.md, paddingVertical: 4 },
+  mapOverlayText: { fontSize: 11, color: COLORS.textMuted, textAlign: 'center' },
   addressRow: { flexDirection: 'row', alignItems: 'flex-start', gap: SPACING.sm },
   addressText: { flex: 1, fontSize: 14, color: COLORS.textMuted, lineHeight: 20 },
   orderItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: SPACING.xs },

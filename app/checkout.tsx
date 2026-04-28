@@ -21,7 +21,7 @@ export default function CheckoutScreen() {
   const router = useRouter();
   const { items, getSubtotal, getTotal, discount, coupon, clearCart } = useCartStore();
   const { user } = useAuthStore();
-  const { placeOrder } = useOrderStore();
+  const { placeOrder, subscribeToActiveOrder } = useOrderStore();
   const razorpay = useRazorpay();
 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cod');
@@ -43,10 +43,9 @@ export default function CheckoutScreen() {
     return paymentMethod === 'cod' ? 'Place Order (COD)' : `Pay ₹${total} Online`;
   };
 
-  // ── Finalize: save to Firestore via orderStore ───────────────────────────────
   const finalizeOrder = async (paymentId?: string) => {
     try {
-      await placeOrder({
+      const order = await placeOrder({
         userId: user?.id || 'guest',
         items: items.map((i: any) => ({
           id: i.id,
@@ -70,6 +69,7 @@ export default function CheckoutScreen() {
         paymentId,
         estimatedTime: '30-40 min',
       });
+      subscribeToActiveOrder(order.id);
       clearCart();
       setLoading(false);
       router.replace('/order-tracking');
@@ -98,7 +98,6 @@ export default function CheckoutScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={22} color={COLORS.text} />
@@ -108,7 +107,6 @@ export default function CheckoutScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Delivery Address */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Delivery Address</Text>
           <View style={styles.card}>
@@ -137,7 +135,6 @@ export default function CheckoutScreen() {
           </View>
         </View>
 
-        {/* Order Items */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Order Summary ({items.length} item{items.length !== 1 ? 's' : ''})</Text>
           <View style={styles.card}>
@@ -158,7 +155,6 @@ export default function CheckoutScreen() {
           </View>
         </View>
 
-        {/* Payment Method */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Payment Method</Text>
           <PaymentMethodSelector
@@ -168,7 +164,6 @@ export default function CheckoutScreen() {
           />
         </View>
 
-        {/* Bill Details */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Bill Details</Text>
           <View style={styles.card}>
@@ -194,7 +189,6 @@ export default function CheckoutScreen() {
         <View style={{ height: 120 }} />
       </ScrollView>
 
-      {/* Footer */}
       <View style={styles.footer}>
         <View>
           <Text style={styles.footerTotal}>₹{total}</Text>
@@ -220,7 +214,6 @@ export default function CheckoutScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Razorpay WebView Modal */}
       {razorpay.webViewVisible && razorpay.razorpayOrderId && (
         <RazorpayWebView
           visible={razorpay.webViewVisible}

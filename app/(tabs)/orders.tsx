@@ -11,7 +11,6 @@ import { useOrderStore, Order, OrderStatus } from '@/store/orderStore';
 import { useAuthStore } from '@/store/authStore';
 import { useCartStore } from '@/store/cartStore';
 
-// ── Status config ──────────────────────────────────────────────────────────────
 const STATUS_CONFIG: Record<OrderStatus, { label: string; color: string; icon: string }> = {
   placed:           { label: 'Order Placed',       color: '#F59E0B', icon: 'time-outline' },
   accepted:         { label: 'Accepted',            color: '#3B82F6', icon: 'checkmark-circle-outline' },
@@ -21,20 +20,17 @@ const STATUS_CONFIG: Record<OrderStatus, { label: string; color: string; icon: s
   cancelled:        { label: 'Cancelled',           color: '#EF4444', icon: 'close-circle-outline' },
 };
 
-// ── Format date ────────────────────────────────────────────────────────────────
 function formatDate(iso: string) {
   const d = new Date(iso);
   return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
-// ── Single Order Card ──────────────────────────────────────────────────────────
 function OrderCard({ order, onTrack, onReorder }: { order: Order; onTrack: () => void; onReorder: () => void }) {
   const cfg = STATUS_CONFIG[order.status];
   const isActive = ['placed', 'accepted', 'preparing', 'out_for_delivery'].includes(order.status);
 
   return (
     <View style={styles.card}>
-      {/* Header row */}
       <View style={styles.cardHeader}>
         <View>
           <Text style={styles.orderId}>#{order.id.slice(-8).toUpperCase()}</Text>
@@ -46,14 +42,12 @@ function OrderCard({ order, onTrack, onReorder }: { order: Order; onTrack: () =>
         </View>
       </View>
 
-      {/* Items preview */}
       <View style={styles.itemsRow}>
         <Text style={styles.itemsText} numberOfLines={2}>
           {order.items.map((i) => `${i.quantity}× ${i.name}`).join('  •  ')}
         </Text>
       </View>
 
-      {/* Bill row */}
       <View style={styles.billRow}>
         <View style={styles.billLeft}>
           <Ionicons
@@ -68,7 +62,6 @@ function OrderCard({ order, onTrack, onReorder }: { order: Order; onTrack: () =>
         <Text style={styles.totalText}>₹{order.total}</Text>
       </View>
 
-      {/* Progress bar for active orders */}
       {isActive && (
         <View style={styles.progressWrap}>
           {(['placed', 'accepted', 'preparing', 'out_for_delivery', 'delivered'] as OrderStatus[]).map((s, i) => (
@@ -85,7 +78,6 @@ function OrderCard({ order, onTrack, onReorder }: { order: Order; onTrack: () =>
         </View>
       )}
 
-      {/* Action buttons */}
       <View style={styles.actions}>
         {isActive && (
           <TouchableOpacity style={styles.trackBtn} onPress={onTrack}>
@@ -107,7 +99,6 @@ function OrderCard({ order, onTrack, onReorder }: { order: Order; onTrack: () =>
   );
 }
 
-// ── Empty State ────────────────────────────────────────────────────────────────
 function EmptyOrders({ onBrowse }: { onBrowse: () => void }) {
   return (
     <View style={styles.emptyWrap}>
@@ -121,11 +112,10 @@ function EmptyOrders({ onBrowse }: { onBrowse: () => void }) {
   );
 }
 
-// ── Screen ─────────────────────────────────────────────────────────────────────
 export default function OrdersScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
-  const { orders, loading, fetchOrders, setActiveOrder, reorderItems } = useOrderStore();
+  const { orders, loading, fetchOrders, setActiveOrder, reorderItems, subscribeToActiveOrder } = useOrderStore();
   const addItem = useCartStore((s) => s.addItem);
 
   const load = useCallback(() => {
@@ -136,6 +126,7 @@ export default function OrdersScreen() {
 
   const handleTrack = (order: Order) => {
     setActiveOrder(order);
+    subscribeToActiveOrder(order.id);
     router.push('/order-tracking');
   };
 
@@ -156,7 +147,6 @@ export default function OrdersScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>My Orders</Text>
         {loading && <ActivityIndicator size="small" color={COLORS.primary} />}
@@ -189,40 +179,28 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.bg },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.base, paddingVertical: SPACING.md, backgroundColor: COLORS.white, borderBottomWidth: 1, borderBottomColor: COLORS.border },
   title: { fontSize: 20, fontWeight: '900', color: COLORS.text, letterSpacing: -0.4 },
-
-  // Card
   card: { backgroundColor: COLORS.white, borderRadius: RADIUS.xl, padding: SPACING.base, ...SHADOW.sm, borderWidth: 1, borderColor: COLORS.border },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: SPACING.sm },
   orderId: { fontSize: 15, fontWeight: '800', color: COLORS.text },
   orderDate: { fontSize: 12, color: COLORS.textMuted, marginTop: 2 },
   statusBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: SPACING.sm, paddingVertical: 4, borderRadius: RADIUS.full },
   statusText: { fontSize: 11, fontWeight: '700' },
-
-  // Items
   itemsRow: { paddingVertical: SPACING.sm, borderTopWidth: 1, borderBottomWidth: 1, borderColor: COLORS.border, marginBottom: SPACING.sm },
   itemsText: { fontSize: 13, color: COLORS.textMuted, lineHeight: 18 },
-
-  // Bill
   billRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.md },
   billLeft: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   payLabel: { fontSize: 12, color: COLORS.textMuted },
   totalText: { fontSize: 16, fontWeight: '800', color: COLORS.text },
-
-  // Progress
   progressWrap: { flexDirection: 'row', gap: 4, marginBottom: SPACING.md },
   progressStep: { flex: 1, height: 4, borderRadius: 2 },
   progressActive: { backgroundColor: COLORS.primary },
   progressInactive: { backgroundColor: COLORS.border },
-
-  // Actions
   actions: { flexDirection: 'row', gap: SPACING.sm },
   trackBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: COLORS.primary, paddingVertical: SPACING.sm + 2, borderRadius: RADIUS.lg },
   trackBtnText: { color: COLORS.white, fontWeight: '800', fontSize: 13 },
   reorderBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: COLORS.primaryGlow || '#E6F4F1', paddingVertical: SPACING.sm + 2, borderRadius: RADIUS.lg, borderWidth: 1.5, borderColor: COLORS.primary },
   reorderBtnText: { color: COLORS.primary, fontWeight: '800', fontSize: 13 },
   cancelledNote: { fontSize: 12, color: COLORS.error || '#EF4444', fontStyle: 'italic' },
-
-  // Empty
   emptyContainer: { flex: 1, justifyContent: 'center' },
   emptyWrap: { alignItems: 'center', paddingHorizontal: SPACING.xl, paddingVertical: SPACING.xl * 2 },
   emptyEmoji: { fontSize: 64, marginBottom: SPACING.lg },
