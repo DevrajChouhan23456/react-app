@@ -1,66 +1,84 @@
-import { MENU_ITEMS, MENU_CATEGORIES } from '@/constants/data';
-import api from '@/services/api';
+import {
+  collection,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  doc,
+  getDocs,
+  query,
+  orderBy,
+  serverTimestamp,
+} from 'firebase/firestore';
+import { db } from '@/services/firebase';
 
-type BackendMenuItem = {
-  id: string;
+export type FoodCategory = 'Dal' | 'Bhaffle' | 'Drinks' | 'Combos' | 'Extras';
+
+export interface Addon {
   name: string;
-  description?: string;
   price: number;
-  image?: string | null;
-  category?: string | null;
-  available?: boolean;
-};
-
-function mapBackendItem(item: BackendMenuItem) {
-  // Merge backend item with local defaults so UI always has full data
-  const local = MENU_ITEMS.find((m) => m.id === item.id);
-  return {
-    ...local,
-    ...item,
-    category: item.category || local?.category || 'Dal Bafla',
-    image: item.image || local?.image,
-    rating: local?.rating ?? 4.5,
-    prepTime: local?.prepTime ?? '20 min',
-    isVeg: local?.isVeg ?? true,
-    isBestseller: local?.isBestseller ?? false,
-    addons: local?.addons ?? [],
-    calories: local?.calories ?? 0,
-    originalPrice: local?.originalPrice ?? item.price,
-  };
 }
 
-export const menuService = {
-  getCategories: async () => {
-    return MENU_CATEGORIES;
-  },
+export interface MenuItem {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  category: FoodCategory;
+  image: string;      // download URL from Firebase Storage (or placeholder)
+  available: boolean;
+  addons: Addon[];    // e.g. [{name:'Extra Ghee', price:10}, {name:'Spicy', price:0}]
+  spiceLevel?: 'mild' | 'medium' | 'hot';
+  isVeg: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
 
-  getItems: async (category?: string) => {
-    try {
-      const items = (await api.get<BackendMenuItem[]>('/menu')).map(mapBackendItem);
-      if (!category || category === 'All') return items;
-      return items.filter((item) => item.category === category);
-    } catch {
-      // Backend not running — fall back to local mock
-      if (!category || category === 'All') return MENU_ITEMS;
-      return MENU_ITEMS.filter((item) => item.category === category);
-    }
-  },
+type NewMenuItem = Omit<MenuItem, 'id' | 'createdAt' | 'updatedAt'>;
 
-  getItemById: async (id: string) => {
-    try {
-      const item = await api.get<BackendMenuItem>(`/menu/${id}`);
-      return mapBackendItem(item);
-    } catch {
-      return MENU_ITEMS.find((item) => item.id === id) || null;
-    }
-  },
+const MENU_COL = 'menuItems';
 
-  getBestsellers: async () => {
-    try {
-      const items = (await api.get<BackendMenuItem[]>('/menu')).map(mapBackendItem);
-      return items.filter((item) => item.isBestseller);
-    } catch {
-      return MENU_ITEMS.filter((item) => item.isBestseller);
-    }
-  },
-};
+/** Fetch all menu items ordered by category */
+export async function fetchMenuItems(): Promise<MenuItem[]> {
+  const q = query(collection(db, MENU_COL), orderBy('category'), orderBy('name'));
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({
+    ...(d.data() as Omit<MenuItem, 'id'>),
+    id: d.id,
+    createdAt: d.data().createdAt?.toDate?.()?.toISOString?.() ?? '',
+    updatedAt: d.data().updatedAt?.toDate?.()?.toISOString?.() ?? '',
+  }));
+}
+
+/** Add a new menu item */
+export async function addMenuItem(item: NewMenuItem): Promise<string> {
+  const ref = await addDoc(collection(db, MENU_COL), {
+    ...item,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  return ref.id;
+}
+
+/** Update an existing menu item (partial update) */
+export async function updateMenuItem(
+  id: string,
+  changes: Partial<Omit<MenuItem, 'id' | 'createdAt'>>
+): Promise<void> {
+  await updateDoc(doc(db, MENU_COL, id), {
+    ...changes,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+/** Toggle item availability on / off */
+export async function toggleItemAvailability(id: string, available: boolean): Promise<void> {
+  await updateDoc(doc(db, MENU_COL, id), {
+    available,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+/** Delete a menu item permanently */
+export async function deleteMenuItem(id: string): Promise<void> {
+  await deleteDoc(doc(db, MENU_COL, id));
+}
