@@ -1,18 +1,29 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { COLORS, SPACING, RADIUS, SHADOW } from '@/constants/theme';
-
-// Note: We keep this screen purely UI-only while you are using Expo Go.
-// Expo Go on SDK 53 no longer supports remote push notifications via expo-notifications.
-// When you build a development client, we can re-introduce the real permission logic.
+import { useAuthStore } from '@/store/authStore';
+import { registerForPushNotificationsAsync } from '@/services/notifications';
 
 export default function NotificationsOptInScreen() {
   const router = useRouter();
+  const { user } = useAuthStore();
+  const [loading, setLoading] = useState(false);
 
   const goHome = () => {
     router.replace('/(tabs)');
+  };
+
+  const handleEnable = async () => {
+    setLoading(true);
+    try {
+      await registerForPushNotificationsAsync(user?.id);
+    } catch (e) {
+      console.log('Notification setup error', e);
+    }
+    setLoading(false);
+    goHome();
   };
 
   return (
@@ -24,15 +35,20 @@ export default function NotificationsOptInScreen() {
 
         <Text style={styles.title}>Get updates on your order status</Text>
         <Text style={styles.subtitle}>
-          Turn on notifications in your device settings later to get real-time updates on your Dal Bafla orders.
+          Turn on notifications to get real-time updates when your Dal Bafla order is accepted, prepared and delivered.
         </Text>
 
         <TouchableOpacity
           style={styles.primaryBtn}
-          onPress={goHome}
+          onPress={handleEnable}
           activeOpacity={0.85}
+          disabled={loading}
         >
-          <Text style={styles.primaryText}>Continue</Text>
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.primaryText}>Enable notifications</Text>
+          )}
         </TouchableOpacity>
 
         <TouchableOpacity onPress={goHome} style={styles.skipBtn}>
@@ -50,8 +66,13 @@ const styles = StyleSheet.create({
   title: { fontSize: 22, fontWeight: '800', color: COLORS.text, width: '100%', marginBottom: SPACING.sm },
   subtitle: { fontSize: 14, color: COLORS.textMuted, lineHeight: 20, width: '100%', marginBottom: SPACING.xl },
   primaryBtn: {
-    width: '100%', backgroundColor: COLORS.primary, borderRadius: RADIUS.xl,
-    paddingVertical: SPACING.md, alignItems: 'center', justifyContent: 'center', ...SHADOW.md,
+    width: '100%',
+    backgroundColor: COLORS.primary,
+    borderRadius: RADIUS.xl,
+    paddingVertical: SPACING.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...SHADOW.md,
   },
   primaryText: { color: '#fff', fontSize: 15, fontWeight: '800' },
   skipBtn: { marginTop: SPACING.lg },

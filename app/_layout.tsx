@@ -4,6 +4,8 @@ import { StatusBar } from 'expo-status-bar';
 import { useAuthStore } from '@/store/authStore';
 import { View, ActivityIndicator } from 'react-native';
 import { COLORS } from '@/constants/theme';
+import * as Notifications from 'expo-notifications';
+import { useOrderStore } from '@/store/orderStore';
 
 export default function RootLayout() {
   const { session, user, loading, loadSession } = useAuthStore();
@@ -20,16 +22,28 @@ export default function RootLayout() {
     const inAuthGroup = segments[0] === 'auth';
 
     if (!session) {
-      // Not logged in → go to auth
       if (!inAuthGroup) router.replace('/auth/phone');
     } else if (session && !user?.name) {
-      // Logged in but no profile → setup
       router.replace('/auth/profile-setup');
     } else if (session && user?.name && inAuthGroup) {
-      // Logged in with profile → go to app
       router.replace('/(tabs)');
     }
   }, [session, user, loading]);
+
+  useEffect(() => {
+    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+      const data = response.notification.request.content.data as any;
+      const orderId = data?.orderId;
+      if (!orderId) return;
+
+      const { subscribeToActiveOrder, setActiveOrder } = useOrderStore.getState();
+      setActiveOrder({ id: orderId } as any);
+      subscribeToActiveOrder(orderId);
+      router.push('/order-tracking');
+    });
+
+    return () => sub.remove();
+  }, []);
 
   if (loading) {
     return (
