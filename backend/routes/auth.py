@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
-from services.msg91Service import send_otp, verify_otp
+from services.msg91Service import send_otp, verify_otp_async
 
 router = APIRouter()
 
@@ -16,8 +16,8 @@ class VerifyOtpRequest(BaseModel):
 
 @router.post("/send-otp")
 async def send_otp_route(body: SendOtpRequest):
-    """
-    Send OTP to the given phone number via MSG91.
+    """Send OTP to the given phone number via MSG91.
+
     In dev mode (MSG91_DEV_MODE=true), returns dev_otp in response.
     """
     result = await send_otp(body.phone)
@@ -30,12 +30,12 @@ async def send_otp_route(body: SendOtpRequest):
 
 
 @router.post("/verify-otp")
-def verify_otp_route(body: VerifyOtpRequest):
-    """
-    Verify OTP entered by user.
+async def verify_otp_route(body: VerifyOtpRequest):
+    """Verify OTP entered by user.
+
     Returns success + a simple user token (extend with JWT later).
     """
-    result = verify_otp(body.phone, body.otp)
+    result = await verify_otp_async(body.phone, body.otp)
     if not result["success"]:
         return {"success": False, "message": result["message"]}
 
