@@ -1,19 +1,20 @@
 import React, { useCallback, useRef, useEffect, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, Animated, Dimensions, StatusBar, Image,
+  StyleSheet, Animated, Dimensions, StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, RADIUS, SHADOW } from '@/constants/theme';
-import { MENU_ITEMS, OFFERS, MENU_CATEGORIES } from '@/constants/data';
+import { MENU_ITEMS, OFFERS, HOME_CATEGORIES } from '@/constants/data';
 import FoodCard from '@/components/FoodCard';
 import { useCartStore } from '@/store/cartStore';
 import { useAuthStore } from '@/store/authStore';
 
 const { width } = Dimensions.get('window');
+const CARD_W = (width - SPACING.base * 2 - SPACING.sm) / 2; // 2-column grid with gap
 
 // ── Fade-in animation wrapper ──────────────────────────────────────────────
 function FadeInView({ delay = 0, children }: { delay?: number; children: React.ReactNode }) {
@@ -30,9 +31,9 @@ function FadeInView({ delay = 0, children }: { delay?: number; children: React.R
 
 // ── Promo banner data ──────────────────────────────────────────────────────
 const PROMO_BANNERS = [
-  { id: 1, title: 'Dal Bafla Combo', subtitle: 'Classic authentic taste \nwith extra ghee & churma', badge: '🔥 BESTSELLER', gradient: ['#D4521A', '#E8793A'] as const },
+  { id: 1, title: 'Dal Bhaffle Combo', subtitle: 'Classic authentic taste\nwith extra ghee & churma', badge: '🔥 BESTSELLER', gradient: ['#C8420F', '#E8793A'] as const },
   { id: 2, title: 'Free Delivery', subtitle: 'On orders above ₹199\nToday only!', badge: '🚀 LIMITED', gradient: ['#1A7D4A', '#2EAA6B'] as const },
-  { id: 3, title: 'Loyalty Points', subtitle: 'Earn 10 pts on every order\nRedeem for discounts', badge: '⭐ REWARDS', gradient: ['#6B3FC8', '#9B6BF0'] as const },
+  { id: 3, title: 'Loyalty Points', subtitle: 'Earn 10 pts on every order\nRedeem for discounts', badge: '⭐ REWARDS', gradient: ['#5A3FC0', '#9B6BF0'] as const },
 ];
 
 export default function HomeScreen() {
@@ -61,11 +62,12 @@ export default function HomeScreen() {
     return () => clearInterval(timer);
   }, []);
 
-  // Sticky header opacity
   const stickyBg = scrollY.interpolate({ inputRange: [0, 60], outputRange: ['rgba(255,248,240,0)', 'rgba(255,248,240,1)'], extrapolate: 'clamp' });
   const stickyBorder = scrollY.interpolate({ inputRange: [40, 80], outputRange: [0, 1], extrapolate: 'clamp' });
 
   const firstName = user?.name?.split(' ')[0] || 'Foodie';
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -110,7 +112,7 @@ export default function HomeScreen() {
         <FadeInView delay={0}>
           <TouchableOpacity style={styles.searchBar} onPress={() => router.push('/(tabs)/menu')} activeOpacity={0.85}>
             <Ionicons name="search" size={18} color={COLORS.textMuted} />
-            <Text style={styles.searchText}>Search dal, bafla, sweets...</Text>
+            <Text style={styles.searchText}>Search dal, bhaffle, drinks...</Text>
             <View style={styles.micBtn}>
               <Ionicons name="mic" size={15} color={COLORS.primary} />
             </View>
@@ -120,8 +122,10 @@ export default function HomeScreen() {
         {/* ── Greeting strip ────────────────────────────────────────── */}
         <FadeInView delay={60}>
           <View style={styles.greetStrip}>
-            <Text style={styles.greetText}>Good evening, <Text style={{ color: COLORS.primary, fontWeight: '800' }}>{firstName}</Text> 🙏</Text>
-            <Text style={styles.greetSub}>What's on your mind today?</Text>
+            <Text style={styles.greetText}>
+              {greeting}, <Text style={{ color: COLORS.primary, fontWeight: '800' }}>{firstName}</Text> 🙏
+            </Text>
+            <Text style={styles.greetSub}>Craving something authentic today?</Text>
           </View>
         </FadeInView>
 
@@ -155,7 +159,6 @@ export default function HomeScreen() {
                 </TouchableOpacity>
               ))}
             </ScrollView>
-            {/* Dots */}
             <View style={styles.dotsRow}>
               {PROMO_BANNERS.map((_, i) => (
                 <View key={i} style={[styles.dot, i === activeBanner && styles.dotActive]} />
@@ -170,7 +173,7 @@ export default function HomeScreen() {
             {[
               { icon: '⚡', val: '30 min', sub: 'Fast Delivery' },
               { icon: '🧈', val: 'Pure Ghee', sub: 'Desi Style' },
-              { icon: '⭐', val: '4.8 Rating', sub: '500+ reviews' },
+              { icon: '⭐', val: '4.8', sub: '500+ reviews' },
             ].map((s, i) => (
               <View key={i} style={styles.statCard}>
                 <Text style={styles.statIcon}>{s.icon}</Text>
@@ -181,36 +184,65 @@ export default function HomeScreen() {
           </View>
         </FadeInView>
 
-        {/* ── Categories ────────────────────────────────────────────── */}
+        {/* ════════════════════════════════════════════════════════════
+            ── DAL BHAFFLE BRANDED CATEGORY CARDS (2×2 grid) ─────────
+            ════════════════════════════════════════════════════════ */}
         <FadeInView delay={220}>
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>What's on your mind?</Text>
+              <Text style={styles.sectionTitle}>What are you craving? 🤤</Text>
             </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              {MENU_CATEGORIES.map((cat) => (
+            <View style={styles.catGrid}>
+              {HOME_CATEGORIES.map((cat, index) => (
                 <TouchableOpacity
                   key={cat.id}
-                  style={styles.catChip}
-                  onPress={() => router.push('/(tabs)/menu')}
-                  activeOpacity={0.75}
+                  activeOpacity={0.88}
+                  style={styles.catCardOuter}
+                  onPress={() => router.push({ pathname: '/(tabs)/menu', params: { category: cat.category } })}
                 >
-                  <View style={styles.catIconWrap}>
-                    <Text style={styles.catIcon}>{cat.icon}</Text>
-                  </View>
-                  <Text style={styles.catName}>{cat.name}</Text>
+                  <LinearGradient
+                    colors={cat.gradient}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.catCard}
+                  >
+                    {/* Subtle glow orb */}
+                    <View style={styles.catGlow} />
+
+                    {/* Badge top-left */}
+                    <View style={styles.catBadge}>
+                      <Text style={styles.catBadgeText}>{cat.badge}</Text>
+                    </View>
+
+                    {/* Big emoji */}
+                    <Text style={styles.catEmoji}>{cat.emoji}</Text>
+
+                    {/* Name + tagline */}
+                    <View style={styles.catInfo}>
+                      <Text style={styles.catName}>{cat.name}</Text>
+                      <Text style={styles.catTagline}>{cat.tagline}</Text>
+                    </View>
+
+                    {/* Arrow */}
+                    <View style={styles.catArrow}>
+                      <Ionicons name="arrow-forward" size={14} color="rgba(255,255,255,0.9)" />
+                    </View>
+                  </LinearGradient>
                 </TouchableOpacity>
               ))}
-            </ScrollView>
+            </View>
           </View>
         </FadeInView>
 
         {/* ── Offers Strip ──────────────────────────────────────────── */}
-        <FadeInView delay={270}>
+        <FadeInView delay={290}>
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Offers & Deals</Text>
-              <View style={styles.liveBadge}><View style={styles.liveDot} /><Text style={styles.liveText}>LIVE</Text></View>
+              <View style={styles.liveBadge}>
+                <View style={styles.liveDot} />
+                <Text style={styles.liveText}>LIVE</Text>
+              </View>
             </View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               {OFFERS.map((offer) => (
@@ -229,7 +261,7 @@ export default function HomeScreen() {
         </FadeInView>
 
         {/* ── Bestsellers ───────────────────────────────────────────── */}
-        <FadeInView delay={320}>
+        <FadeInView delay={340}>
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Bestsellers 🔥</Text>
@@ -250,10 +282,12 @@ export default function HomeScreen() {
         </FadeInView>
 
         {/* ── Why Us ────────────────────────────────────────────────── */}
-        <FadeInView delay={370}>
+        <FadeInView delay={390}>
           <View style={styles.whyCard}>
-            <Text style={styles.whyTitle}>Why Gau Stories? 🫕</Text>
-            <Text style={styles.whyDesc}>Authentic Dal Bafla made fresh daily with pure desi ghee — just like home.</Text>
+            <Text style={styles.whyTitle}>Why Dal Bhaffle? 🫕</Text>
+            <Text style={styles.whyDesc}>
+              Authentic Dal Bhaffle made fresh daily with pure desi ghee — straight from the heart of Bhopal, just like home.
+            </Text>
           </View>
         </FadeInView>
 
@@ -263,7 +297,9 @@ export default function HomeScreen() {
       {/* ── Floating Cart Bar ─────────────────────────────────────── */}
       {cartCount > 0 && (
         <TouchableOpacity style={styles.cartBar} onPress={() => router.push('/(tabs)/cart')} activeOpacity={0.92}>
-          <View style={styles.cartBadge}><Text style={styles.cartBadgeText}>{cartCount}</Text></View>
+          <View style={styles.cartBadge}>
+            <Text style={styles.cartBadgeText}>{cartCount}</Text>
+          </View>
           <Text style={styles.cartBarText}>View Cart</Text>
           <Ionicons name="arrow-forward" size={18} color={COLORS.white} />
         </TouchableOpacity>
@@ -271,8 +307,6 @@ export default function HomeScreen() {
     </SafeAreaView>
   );
 }
-
-const CARD_GAP = SPACING.base;
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#FFF8F0' },
@@ -292,7 +326,7 @@ const styles = StyleSheet.create({
   // Search
   searchBar: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, backgroundColor: '#fff', marginHorizontal: SPACING.base, borderRadius: RADIUS.xl, paddingVertical: SPACING.md, paddingHorizontal: SPACING.md, marginBottom: SPACING.sm, borderWidth: 1.5, borderColor: '#F0E8DC', ...SHADOW.sm },
   searchText: { flex: 1, fontSize: 14, color: COLORS.textFaint, fontWeight: '500' },
-  micBtn: { width: 30, height: 30, borderRadius: RADIUS.md, backgroundColor: COLORS.primaryGlow, alignItems: 'center', justifyContent: 'center' },
+  micBtn: { width: 30, height: 30, borderRadius: RADIUS.md, backgroundColor: '#FFF0E8', alignItems: 'center', justifyContent: 'center' },
 
   // Greeting
   greetStrip: { paddingHorizontal: SPACING.base, paddingBottom: SPACING.md },
@@ -324,17 +358,63 @@ const styles = StyleSheet.create({
   section: { paddingHorizontal: SPACING.base, marginBottom: SPACING.xl },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.md },
   sectionTitle: { fontSize: 17, fontWeight: '800', color: COLORS.text, letterSpacing: -0.3 },
+  seeAllBtn: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  seeAllText: { fontSize: 13, fontWeight: '700', color: COLORS.primary },
   liveBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FFF0E8', paddingHorizontal: SPACING.sm, paddingVertical: 3, borderRadius: RADIUS.full },
   liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#E84040' },
   liveText: { fontSize: 10, fontWeight: '800', color: '#E84040', letterSpacing: 0.5 },
-  seeAllBtn: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  seeAllText: { fontSize: 13, fontWeight: '700', color: COLORS.primary },
 
-  // Categories
-  catChip: { alignItems: 'center', marginRight: SPACING.md, width: 72 },
-  catIconWrap: { width: 64, height: 64, backgroundColor: '#fff', borderRadius: RADIUS.xl, alignItems: 'center', justifyContent: 'center', marginBottom: SPACING.xs, borderWidth: 1.5, borderColor: '#F0E8DC', ...SHADOW.sm },
-  catIcon: { fontSize: 30 },
-  catName: { fontSize: 11, fontWeight: '700', color: COLORS.textMuted, textAlign: 'center', lineHeight: 15 },
+  // ── Branded Category Cards (2×2 grid) ──────────────────────────────────
+  catGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.sm,
+  },
+  catCardOuter: {
+    width: CARD_W,
+    borderRadius: RADIUS.xxl,
+    overflow: 'hidden',
+    ...SHADOW.md,
+  },
+  catCard: {
+    width: '100%',
+    height: 140,
+    padding: SPACING.md,
+    justifyContent: 'space-between',
+    overflow: 'hidden',
+  },
+  catGlow: {
+    position: 'absolute',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    bottom: -30,
+    right: -30,
+  },
+  catBadge: {
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    alignSelf: 'flex-start',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 3,
+    borderRadius: RADIUS.full,
+  },
+  catBadgeText: { fontSize: 9, fontWeight: '800', color: '#fff', letterSpacing: 0.4 },
+  catEmoji: { fontSize: 40, textAlign: 'center', alignSelf: 'center', marginTop: -4 },
+  catInfo: { gap: 2 },
+  catName: { fontSize: 16, fontWeight: '900', color: '#fff', letterSpacing: -0.3 },
+  catTagline: { fontSize: 10, color: 'rgba(255,255,255,0.8)', fontWeight: '600' },
+  catArrow: {
+    position: 'absolute',
+    bottom: SPACING.md,
+    right: SPACING.md,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
   // Offers
   offerCard: { width: 200, borderRadius: RADIUS.xl, padding: SPACING.lg, overflow: 'hidden', ...SHADOW.md },
