@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, ActivityIndicator, KeyboardAvoidingView,
-  Platform, ScrollView, Alert,
+  Platform, ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -52,7 +52,8 @@ export default function OtpScreen() {
       if (needsProfile) {
         router.replace('/auth/profile-setup');
       } else {
-        router.replace('/(tabs)');
+        // After successful login, always show notifications opt-in
+        router.replace('/notifications-optin');
       }
     }
   };
