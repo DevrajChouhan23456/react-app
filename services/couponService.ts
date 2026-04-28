@@ -1,71 +1,82 @@
 import {
-  collection,
-  getDocs,
   doc,
   getDoc,
-  query,
-  where,
+  collection,
+  addDoc,
   updateDoc,
+  getDocs,
+  serverTimestamp,
   increment,
-  Timestamp,
 } from 'firebase/firestore';
 import { db } from '@/services/firebase';
 
-export type DiscountType = 'percent' | 'flat';
-
 export interface Coupon {
-  id: string;              // coupon code (e.g. WELCOME50)
-  description: string;
-  discountType: DiscountType;
-  discountValue: number;   // 50 → 50% off  OR  ₹50 flat
-  minOrderValue: number;
-  maxDiscount: number;     // cap for percent discounts
-  usageLimit: number;      // total uses allowed
+  id: string;
+  code: string;            // e.g. "WELCOME50"
+  type: 'flat' | 'percent'; // flat = ₹off, percent = %off
+  value: number;           // 50 = ₹50 off OR 20 = 20% off
+  minOrder: number;        // minimum order total to use coupon
+  maxDiscount?: number;    // cap on percent discount
+  usageLimit: number;      // total allowed uses (-1 = unlimited)
   usedCount: number;
   validUntil: string;      // ISO date string
   active: boolean;
 }
 
-export interface AppliedCoupon {
-  code: string;
-  discountAmount: number;
-  description: string;
-}
-
 const COUPONS_COL = 'coupons';
 
-/** Validate and return discount amount for an order total */
-export async function validateCoupon(
-  code: string,
-  orderTotal: number
-): Promise<AppliedCoupon> {
-  const upper = code.trim().toUpperCase();
-  const ref = doc(db, COUPONS_COL, upper);
-  const snap = await getDoc(ref);
+/**
+ * Validate and apply a coupon code.
+ * Returns discount amount in ₹, or throws an error string.
+ */
+export async function applyCoupon(code: string, orderTotal: number): Promise<{ coupon: Coupon; discount: number }> {
+  const snap = await getDocs(collection(db, COUPONS_COL));
+  const match = snap.docs.find(
+    (d) => (d.data().code as string).toUpperCase() === code.toUpperCase()
+  );
 
-  if (!snap.exists()) throw new Error('Invalid coupon code.');
+  if (!match) throw new Error('Invalid coupon code');
 
-  const coupon = snap.data() as Omit<Coupon, 'id'>;
+  const coupon = { ...match.data(), id: match.id } as Coupon;
 
-  if (!coupon.active) throw new Error('This coupon is no longer active.');
-  if (coupon.usedCount >= coupon.usageLimit) throw new Error('This coupon has expired (usage limit reached).');
-  if (new Date(coupon.validUntil) < new Date()) throw new Error('This coupon has expired.');
-  if (orderTotal < coupon.minOrderValue)
-    throw new Error(`Minimum order value of ₹${coupon.minOrderValue} required.`);
+  if (!coupon.active) throw new Error('This coupon is no longer active');
+  if (new Date(coupon.validUntil) < new Date()) throw new Error('This coupon has expired');
+  if (coupon.usageLimit !== -1 && coupon.usedCount >= coupon.usageLimit)
+    throw new Error('This coupon has reached its usage limit');
+  if (orderTotal < coupon.minOrder)
+    throw new Error(`Minimum order of ₹${coupon.minOrder} required for this coupon`);
 
-  let discountAmount =
-    coupon.discountType === 'percent'
-      ? Math.min((orderTotal * coupon.discountValue) / 100, coupon.maxDiscount)
-      : coupon.discountValue;
+  let discount =
+    coupon.type === 'flat'
+      ? coupon.value
+      : Math.round((orderTotal * coupon.value) / 100);
 
-  discountAmount = Math.min(discountAmount, orderTotal); // never exceed order total
+  if (coupon.maxDiscount) discount = Math.min(discount, coupon.maxDiscount);
+  discount = Math.min(discount, orderTotal); // can't discount more than total
 
-  return { code: upper, discountAmount: Math.floor(discountAmount), description: coupon.description };
+  return { coupon, discount };
 }
 
-/** Increment usedCount after successful order placement */
-export async function redeemCoupon(code: string): Promise<void> {
-  await updateDoc(doc(db, COUPONS_COL, code.toUpperCase()), {
+/** Consume a coupon (increment usedCount) after a successful order */
+export async function consumeCoupon(couponId: string): Promise<void> {
+  await updateDoc(doc(db, COUPONS_COL, couponId), {
     usedCount: increment(1),
   });
+}
+
+/** Admin: create a new coupon */
+export async function createCoupon(data: Omit<Coupon, 'id' | 'usedCount'>): Promise<string> {
+  const ref = await addDoc(collection(db, COUPONS_COL), {
+    ...data,
+    code: data.code.toUpperCase(),
+    usedCount: 0,
+    createdAt: serverTimestamp(),
+  });
+  return ref.id;
+}
+
+/** Fetch all coupons (for admin panel) */
+export async function fetchAllCoupons(): Promise<Coupon[]> {
+  const snap = await getDocs(collection(db, COUPONS_COL));
+  return snap.docs.map((d) => ({ ...(d.data() as Omit<Coupon, 'id'>), id: d.id }));
 }
