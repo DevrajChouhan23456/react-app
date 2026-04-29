@@ -1,8 +1,10 @@
-// Firebase Phone Auth replaced by backend OTP (MSG91/dev mode)
-// See store/authStore.ts for the new flow:
-//   POST /api/auth/send-otp   → sends OTP via MSG91
-//   POST /api/auth/verify-otp → verifies OTP
-//
-// @react-native-firebase is still used for other features (e.g. push notifications)
-// but phone auth no longer goes through Firebase.
-export {};
+// Firebase app is auto-initialized by @react-native-firebase via google-services.json
+// Import firestore/auth directly from their packages — no explicit init needed.
+
+import firestore from '@react-native-firebase/firestore';
+import auth from '@react-native-firebase/auth';
+
+export { firestore, auth };
+
+// Convenience alias so old `db` references resolve
+export const db = firestore();

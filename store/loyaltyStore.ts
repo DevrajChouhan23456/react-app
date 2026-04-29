@@ -1,19 +1,5 @@
 import { create } from 'zustand';
-import {
-  doc,
-  getDoc,
-  setDoc,
-  updateDoc,
-  increment,
-  collection,
-  addDoc,
-  query,
-  where,
-  orderBy,
-  getDocs,
-  serverTimestamp,
-} from 'firebase/firestore';
-import { db } from '@/services/firebase';
+import firestore from '@react-native-firebase/firestore';
 
 // 1 point per ₹10 spent. 10 points = ₹1 discount.
 export const POINTS_PER_RUPEE = 0.1;   // earn 1 pt per ₹10
@@ -45,6 +31,10 @@ interface LoyaltyState {
 const LOYALTY_COL = 'loyalty';
 const LOYALTY_TXN_COL = 'loyaltyTransactions';
 
+function toIso(ts: any): string {
+  return ts?.toDate?.()?.toISOString?.() ?? new Date().toISOString();
+}
+
 export const useLoyaltyStore = create<LoyaltyState>((set, get) => ({
   points: 0,
   transactions: [],
@@ -53,20 +43,19 @@ export const useLoyaltyStore = create<LoyaltyState>((set, get) => ({
   fetchPoints: async (userId) => {
     set({ loading: true });
     try {
-      const ref = doc(db, LOYALTY_COL, userId);
-      const snap = await getDoc(ref);
-      const pts = snap.exists() ? (snap.data().points ?? 0) : 0;
+      const snap = await firestore().collection(LOYALTY_COL).doc(userId).get();
+      const pts = snap.exists ? (snap.data()?.points ?? 0) : 0;
 
-      const q = query(
-        collection(db, LOYALTY_TXN_COL),
-        where('userId', '==', userId),
-        orderBy('createdAt', 'desc')
-      );
-      const txSnap = await getDocs(q);
+      const txSnap = await firestore()
+        .collection(LOYALTY_TXN_COL)
+        .where('userId', '==', userId)
+        .orderBy('createdAt', 'desc')
+        .get();
+
       const transactions: LoyaltyTransaction[] = txSnap.docs.map((d) => ({
-        ...(d.data() as Omit<LoyaltyTransaction, 'id'>),
+        ...(d.data() as Omit<LoyaltyTransaction, 'id' | 'createdAt'>),
         id: d.id,
-        createdAt: d.data().createdAt?.toDate?.()?.toISOString?.() ?? new Date().toISOString(),
+        createdAt: toIso(d.data().createdAt),
       }));
 
       set({ points: pts, transactions, loading: false });
@@ -80,20 +69,20 @@ export const useLoyaltyStore = create<LoyaltyState>((set, get) => ({
     const earned = Math.floor(orderTotal * POINTS_PER_RUPEE);
     if (earned <= 0) return;
     try {
-      const ref = doc(db, LOYALTY_COL, userId);
-      const snap = await getDoc(ref);
-      if (snap.exists()) {
-        await updateDoc(ref, { points: increment(earned) });
+      const ref = firestore().collection(LOYALTY_COL).doc(userId);
+      const snap = await ref.get();
+      if (snap.exists) {
+        await ref.update({ points: firestore.FieldValue.increment(earned) });
       } else {
-        await setDoc(ref, { userId, points: earned });
+        await ref.set({ userId, points: earned });
       }
-      await addDoc(collection(db, LOYALTY_TXN_COL), {
+      await firestore().collection(LOYALTY_TXN_COL).add({
         userId,
         type: 'earn',
         points: earned,
         orderId,
         description: `Earned for order #${orderId.slice(-6).toUpperCase()}`,
-        createdAt: serverTimestamp(),
+        createdAt: firestore.FieldValue.serverTimestamp(),
       });
       set((s) => ({ points: s.points + earned }));
     } catch (err) {
@@ -104,16 +93,17 @@ export const useLoyaltyStore = create<LoyaltyState>((set, get) => ({
   redeemPoints: async (userId, orderId, pointsToRedeem) => {
     if (pointsToRedeem <= 0) return;
     try {
-      await updateDoc(doc(db, LOYALTY_COL, userId), {
-        points: increment(-pointsToRedeem),
-      });
-      await addDoc(collection(db, LOYALTY_TXN_COL), {
+      await firestore()
+        .collection(LOYALTY_COL)
+        .doc(userId)
+        .update({ points: firestore.FieldValue.increment(-pointsToRedeem) });
+      await firestore().collection(LOYALTY_TXN_COL).add({
         userId,
         type: 'redeem',
         points: -pointsToRedeem,
         orderId,
         description: `Redeemed for order #${orderId.slice(-6).toUpperCase()}`,
-        createdAt: serverTimestamp(),
+        createdAt: firestore.FieldValue.serverTimestamp(),
       });
       set((s) => ({ points: Math.max(0, s.points - pointsToRedeem) }));
     } catch (err) {
@@ -123,7 +113,7 @@ export const useLoyaltyStore = create<LoyaltyState>((set, get) => ({
 
   maxRedeemable: (orderTotal) => {
     const { points } = get();
-    const maxFromTotal = Math.floor(orderTotal * MAX_REDEEM_PERCENT / RUPEES_PER_POINT);
+    const maxFromTotal = Math.floor((orderTotal * MAX_REDEEM_PERCENT) / RUPEES_PER_POINT);
     return Math.min(points, maxFromTotal);
   },
 
