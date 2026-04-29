@@ -1,7 +1,6 @@
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
-import { doc, updateDoc } from 'firebase/firestore';
-import { db } from '@/services/firebase';
+import firestore from '@react-native-firebase/firestore';
 import { router } from 'expo-router';
 
 // Configure how notifications appear when app is in foreground
@@ -36,13 +35,19 @@ export async function registerForPushNotifications(userId: string): Promise<stri
     return null;
   }
 
-  const token = (await Notifications.getExpoPushTokenAsync()).data;
+  let token: string | null = null;
+  try {
+    token = (await Notifications.getExpoPushTokenAsync()).data;
+  } catch (err) {
+    console.error('Failed to get push token:', err);
+    return null;
+  }
 
   // Persist token to Firestore so the backend can send targeted pushes
   try {
-    await updateDoc(doc(db, 'users', userId), { expoPushToken: token });
+    await firestore().collection('users').doc(userId).update({ expoPushToken: token });
   } catch (err) {
-    console.error('Failed to save push token:', err);
+    console.error('Failed to save push token to Firestore:', err);
   }
 
   return token;
@@ -52,7 +57,7 @@ export async function registerForPushNotifications(userId: string): Promise<stri
  * Set up a listener that deep-links into the order tracking screen
  * when the user taps a notification that carries an orderId in its data.
  */
-export function setupNotificationDeepLink() {
+export function setupNotificationDeepLink(): () => void {
   // Handles taps on notifications received while app is open
   const foregroundSub = Notifications.addNotificationResponseReceivedListener((response) => {
     const orderId = response.notification.request.content.data?.orderId as string | undefined;
@@ -70,16 +75,16 @@ export function setupNotificationDeepLink() {
     }
   });
 
-  return () => foregroundSub.remove(); // call to clean up
+  return () => foregroundSub.remove();
 }
 
 /**
  * Helper to send a local test notification (useful during development)
  */
-export async function sendLocalTestNotification(orderId: string, message: string) {
+export async function sendLocalTestNotification(orderId: string, message: string): Promise<void> {
   await Notifications.scheduleNotificationAsync({
     content: {
-      title: '🍛 Dal Bhaffle',
+      title: '\uD83C\uDF5B Dal Bhaffle',
       body: message,
       data: { orderId },
       sound: true,
