@@ -1,14 +1,4 @@
-import {
-  doc,
-  setDoc,
-  collection,
-  getDocs,
-  query,
-  where,
-  orderBy,
-  serverTimestamp,
-} from 'firebase/firestore';
-import { db } from '@/services/firebase';
+import firestore from '@react-native-firebase/firestore';
 
 export interface Review {
   id: string;
@@ -28,21 +18,23 @@ export async function submitReview(
   rating: number,
   comment: string
 ): Promise<void> {
-  await setDoc(doc(db, REVIEWS_COL, orderId), {
+  await firestore().collection(REVIEWS_COL).doc(orderId).set({
     orderId,
     userId,
     rating,
     comment: comment.trim(),
-    createdAt: serverTimestamp(),
+    createdAt: firestore.FieldValue.serverTimestamp(),
   });
 }
 
 /** Fetch all reviews for admin / restaurant dashboard */
 export async function fetchAllReviews(): Promise<Review[]> {
-  const q = query(collection(db, REVIEWS_COL), orderBy('createdAt', 'desc'));
-  const snap = await getDocs(q);
+  const snap = await firestore()
+    .collection(REVIEWS_COL)
+    .orderBy('createdAt', 'desc')
+    .get();
   return snap.docs.map((d) => ({
-    ...(d.data() as Omit<Review, 'id'>),
+    ...(d.data() as Omit<Review, 'id' | 'createdAt'>),
     id: d.id,
     createdAt: d.data().createdAt?.toDate?.()?.toISOString?.() ?? new Date().toISOString(),
   }));
