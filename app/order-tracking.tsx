@@ -1,7 +1,7 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  StyleSheet,
+  StyleSheet, Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,8 +9,167 @@ import { useRouter } from 'expo-router';
 import { COLORS, SPACING, RADIUS, SHADOW } from '@/constants/theme';
 import { useOrderStore } from '@/store/orderStore';
 import OrderStatusStepper from '@/components/OrderStatusStepper';
-import MapView, { Marker } from 'react-native-maps';
 
+// ── Map Placeholder (Expo Go compatible — no react-native-maps needed) ──────
+// Mimics a live map with animated delivery pin pulsing over a grid background.
+function MapPlaceholder({ hasDriver }: { hasDriver: boolean }) {
+  const pulse = useRef(new Animated.Value(1)).current;
+  const drift = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    // Pulsing ring around the pin
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1.6, duration: 900, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1, duration: 900, useNativeDriver: true }),
+      ])
+    ).start();
+    // Gentle vertical float
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(drift, { toValue: -6, duration: 1200, useNativeDriver: true }),
+        Animated.timing(drift, { toValue: 0, duration: 1200, useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
+
+  return (
+    <View style={mapStyles.container}>
+      {/* Grid lines — mimics map tile grid */}
+      {[...Array(5)].map((_, i) => (
+        <View key={`h${i}`} style={[mapStyles.gridH, { top: `${20 * (i + 1)}%` }]} />
+      ))}
+      {[...Array(5)].map((_, i) => (
+        <View key={`v${i}`} style={[mapStyles.gridV, { left: `${20 * (i + 1)}%` }]} />
+      ))}
+
+      {/* Road lines */}
+      <View style={mapStyles.roadH} />
+      <View style={mapStyles.roadV} />
+
+      {/* Destination pin (static) */}
+      <View style={mapStyles.destWrap}>
+        <View style={mapStyles.destPin}>
+          <Ionicons name="home" size={12} color="#fff" />
+        </View>
+        <View style={mapStyles.destStem} />
+      </View>
+
+      {/* Delivery partner pin (animated) */}
+      {hasDriver ? (
+        <View style={mapStyles.driverWrap}>
+          <Animated.View style={[
+            mapStyles.pulsRing,
+            { transform: [{ scale: pulse }] },
+          ]} />
+          <Animated.View style={[
+            mapStyles.driverPin,
+            { transform: [{ translateY: drift }] },
+          ]}>
+            <Text style={{ fontSize: 18 }}>🛵</Text>
+          </Animated.View>
+        </View>
+      ) : (
+        <View style={mapStyles.waitingWrap}>
+          <Text style={mapStyles.waitingText}>🛵 Driver location updates once order is picked up</Text>
+        </View>
+      )}
+
+      {/* LIVE badge */}
+      <View style={mapStyles.liveBadge}>
+        <View style={mapStyles.liveDot} />
+        <Text style={mapStyles.liveText}>LIVE</Text>
+      </View>
+
+      {/* Bhopal label */}
+      <Text style={mapStyles.cityLabel}>Bhopal, MP</Text>
+    </View>
+  );
+}
+
+const mapStyles = StyleSheet.create({
+  container: {
+    height: 220,
+    borderRadius: RADIUS.lg,
+    backgroundColor: '#E8F0D8',
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  gridH: {
+    position: 'absolute', left: 0, right: 0, height: 1,
+    backgroundColor: 'rgba(150,170,120,0.35)',
+  },
+  gridV: {
+    position: 'absolute', top: 0, bottom: 0, width: 1,
+    backgroundColor: 'rgba(150,170,120,0.35)',
+  },
+  roadH: {
+    position: 'absolute', top: '55%', left: 0, right: 0,
+    height: 8, backgroundColor: 'rgba(255,255,255,0.7)',
+  },
+  roadV: {
+    position: 'absolute', left: '45%', top: 0, bottom: 0,
+    width: 8, backgroundColor: 'rgba(255,255,255,0.7)',
+  },
+  destWrap: {
+    position: 'absolute', bottom: '30%', right: '25%',
+    alignItems: 'center',
+  },
+  destPin: {
+    width: 26, height: 26, borderRadius: 13,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 2, borderColor: '#fff',
+  },
+  destStem: {
+    width: 2, height: 6, backgroundColor: COLORS.primary,
+  },
+  driverWrap: {
+    position: 'absolute', top: '30%', left: '30%',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  pulsRing: {
+    position: 'absolute',
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: 'rgba(200,66,15,0.2)',
+    borderWidth: 2, borderColor: 'rgba(200,66,15,0.4)',
+  },
+  driverPin: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: '#fff',
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#000', shadowOpacity: 0.2,
+    shadowOffset: { width: 0, height: 2 }, shadowRadius: 4,
+    elevation: 4,
+  },
+  waitingWrap: {
+    position: 'absolute', bottom: 10, left: 10, right: 10,
+    backgroundColor: 'rgba(255,255,255,0.88)',
+    borderRadius: RADIUS.full,
+    paddingHorizontal: SPACING.md, paddingVertical: 6,
+  },
+  waitingText: {
+    fontSize: 11, color: COLORS.textMuted, textAlign: 'center',
+  },
+  liveBadge: {
+    position: 'absolute', top: 10, left: 10,
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingHorizontal: 8, paddingVertical: 4,
+    borderRadius: RADIUS.full,
+  },
+  liveDot: {
+    width: 6, height: 6, borderRadius: 3,
+    backgroundColor: '#E84040',
+  },
+  liveText: { fontSize: 10, fontWeight: '800', color: '#fff', letterSpacing: 0.5 },
+  cityLabel: {
+    position: 'absolute', bottom: 8, right: 10,
+    fontSize: 10, color: 'rgba(60,80,40,0.6)', fontWeight: '600',
+  },
+});
+
+// ── Main Screen ─────────────────────────────────────────────────────────────
 export default function OrderTrackingScreen() {
   const router = useRouter();
   const { activeOrder } = useOrderStore();
@@ -32,14 +191,6 @@ export default function OrderTrackingScreen() {
   const driverLat = (activeOrder as any).driverLat as number | undefined;
   const driverLng = (activeOrder as any).driverLng as number | undefined;
   const hasDriverLocation = typeof driverLat === 'number' && typeof driverLng === 'number';
-
-  const region = {
-    latitude: hasDriverLocation ? driverLat! : 23.2334, // Bhopal approx
-    longitude: hasDriverLocation ? driverLng! : 77.4336,
-    latitudeDelta: 0.02,
-    longitudeDelta: 0.02,
-  };
-
   const isDelivered = activeOrder.status === 'delivered';
 
   return (
@@ -78,27 +229,10 @@ export default function OrderTrackingScreen() {
           <OrderStatusStepper currentStatus={activeOrder.status} />
         </View>
 
-        {/* Live Map */}
+        {/* Live Map Placeholder */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Live Location</Text>
-          <View style={styles.mapContainer}>
-            <MapView style={styles.map} initialRegion={region} region={region}>
-              {hasDriverLocation && (
-                <Marker
-                  coordinate={{ latitude: driverLat!, longitude: driverLng! }}
-                  title="Delivery partner"
-                  description="Your order is here"
-                />
-              )}
-            </MapView>
-            {!hasDriverLocation && (
-              <View style={styles.mapOverlay}>
-                <Text style={styles.mapOverlayText}>
-                  Driver location will appear here once the order is picked up.
-                </Text>
-              </View>
-            )}
-          </View>
+          <MapPlaceholder hasDriver={hasDriverLocation} />
         </View>
 
         {/* Delivery Address */}
@@ -177,10 +311,6 @@ const styles = StyleSheet.create({
   statusEta: { fontSize: 13, color: COLORS.white + 'CC', marginTop: 2 },
   card: { backgroundColor: COLORS.white, borderRadius: RADIUS.lg, padding: SPACING.base, marginHorizontal: SPACING.base, marginBottom: SPACING.base, ...SHADOW.sm },
   cardTitle: { fontSize: 15, fontWeight: '800', color: COLORS.text, marginBottom: SPACING.md },
-  mapContainer: { height: 220, borderRadius: RADIUS.lg, overflow: 'hidden' },
-  map: { flex: 1 },
-  mapOverlay: { position: 'absolute', bottom: 8, left: 12, right: 12, backgroundColor: COLORS.bg + 'CC', borderRadius: RADIUS.full, paddingHorizontal: SPACING.md, paddingVertical: 4 },
-  mapOverlayText: { fontSize: 11, color: COLORS.textMuted, textAlign: 'center' },
   addressRow: { flexDirection: 'row', alignItems: 'flex-start', gap: SPACING.sm },
   addressText: { flex: 1, fontSize: 14, color: COLORS.textMuted, lineHeight: 20 },
   orderItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: SPACING.xs },
