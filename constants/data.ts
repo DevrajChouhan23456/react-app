@@ -26,7 +26,7 @@ export const HOME_CATEGORIES = [
     tagline: 'Crispy Baked Goodness',
     emoji: '🫓',
     gradient: ['#8B5E3C', '#C4935E'] as const,
-    badge: 'Chef's Special',
+    badge: "Chef's Special",
     category: 'Bhaffle',
   },
   {
@@ -67,7 +67,7 @@ export const MENU_ITEMS = [
     addons: [
       { id: 'a1', name: 'Extra Ghee', price: 20 },
       { id: 'a2', name: 'Extra Dal', price: 30 },
-      { id: 'a3', name: 'Spicy (Level 1–3)', price: 0 },
+      { id: 'a3', name: 'Spicy (Level 1-3)', price: 0 },
     ],
   },
   {
@@ -228,7 +228,7 @@ export const OFFERS = [
   {
     id: 'o1',
     title: 'First Order Special',
-    subtitle: 'Get ₹50 OFF on your first order',
+    subtitle: 'Get \u20b950 OFF on your first order',
     code: 'FIRST50',
     color: '#FF6B00',
   },
