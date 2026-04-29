@@ -26,20 +26,28 @@ export default function LocationSelectScreen() {
       return;
     }
 
-    const loc = await Location.getCurrentPositionAsync({});
-    setStatusText(`Location turned on.\nLat ${loc.coords.latitude.toFixed(3)}, Lng ${loc.coords.longitude.toFixed(3)}`);
-    // Later we can reverse-geocode and save area name into a store so the home header updates.
+    try {
+      const loc = await Location.getCurrentPositionAsync({});
+      setStatusText(`Location detected!\nLat ${loc.coords.latitude.toFixed(3)}, Lng ${loc.coords.longitude.toFixed(3)}`);
+    } catch {
+      setStatusText('Could not get location. Please search manually.');
+      setUsingLocation(false);
+    }
   };
 
   const handleSave = () => {
-    // For now, simply go back to home tabs.
     router.back();
   };
 
   return (
     <SafeAreaView style={styles.safe}>
+      {/* ── Header with Back Button ── */}
       <View style={styles.header}>
-        <Text style={styles.title}>Select Your Location</Text>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+          <Ionicons name="arrow-back" size={22} color={COLORS.text} />
+        </TouchableOpacity>
+        <Text style={styles.title}>Select Location</Text>
+        <View style={{ width: 40 }} />
       </View>
 
       <View style={styles.content}>
@@ -52,10 +60,18 @@ export default function LocationSelectScreen() {
             value={search}
             onChangeText={setSearch}
           />
+          {search.length > 0 && (
+            <TouchableOpacity onPress={() => setSearch('')}>
+              <Ionicons name="close-circle" size={18} color={COLORS.textMuted} />
+            </TouchableOpacity>
+          )}
         </View>
 
         <View style={styles.toggleRow}>
-          <Text style={styles.toggleLabel}>Turn on Location</Text>
+          <View style={styles.toggleLeft}>
+            <Ionicons name="navigate" size={18} color={COLORS.primary} />
+            <Text style={styles.toggleLabel}>Use my current location</Text>
+          </View>
           <Switch
             value={usingLocation}
             onValueChange={handleToggleLocation}
@@ -66,13 +82,18 @@ export default function LocationSelectScreen() {
 
         <View style={styles.emptyState}>
           <View style={styles.emptyCircle}>
-            <Ionicons name="lock-closed-outline" size={28} color={COLORS.textFaint} />
+            <Ionicons
+              name={usingLocation ? 'location' : 'lock-closed-outline'}
+              size={28}
+              color={usingLocation ? COLORS.primary : COLORS.textFaint}
+            />
           </View>
           <Text style={styles.emptyText}>{statusText}</Text>
         </View>
 
         <TouchableOpacity style={styles.primaryBtn} onPress={handleSave} activeOpacity={0.85}>
-          <Text style={styles.primaryText}>Save & Continue</Text>
+          <Ionicons name="checkmark-circle" size={18} color="#fff" />
+          <Text style={styles.primaryText}>Save &amp; Continue</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -81,9 +102,14 @@ export default function LocationSelectScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#F7F7FA' },
-  header: { paddingHorizontal: SPACING.xl, paddingTop: SPACING.xl, paddingBottom: SPACING.md },
-  title: { fontSize: 20, fontWeight: '800', color: COLORS.text },
-  content: { flex: 1, paddingHorizontal: SPACING.xl },
+  header: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: SPACING.base, paddingVertical: SPACING.md,
+    backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: COLORS.border,
+  },
+  backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  title: { fontSize: 17, fontWeight: '800', color: COLORS.text },
+  content: { flex: 1, paddingHorizontal: SPACING.xl, paddingTop: SPACING.lg },
   searchRow: {
     flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff',
     borderRadius: RADIUS.xl, paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm,
@@ -93,8 +119,9 @@ const styles = StyleSheet.create({
   toggleRow: {
     marginTop: SPACING.lg, flexDirection: 'row', justifyContent: 'space-between',
     alignItems: 'center', backgroundColor: '#fff', borderRadius: RADIUS.xl,
-    paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm, ...SHADOW.sm,
   },
+  toggleLeft: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
   toggleLabel: { fontSize: 14, fontWeight: '600', color: COLORS.text },
   emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   emptyCircle: {
@@ -105,7 +132,7 @@ const styles = StyleSheet.create({
   primaryBtn: {
     marginBottom: SPACING.xl, backgroundColor: COLORS.primary,
     borderRadius: RADIUS.xl, paddingVertical: SPACING.md,
-    alignItems: 'center', justifyContent: 'center',
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACING.sm,
   },
   primaryText: { color: '#fff', fontSize: 15, fontWeight: '800' },
 });

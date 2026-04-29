@@ -31,7 +31,7 @@ interface AuthState {
   loading: boolean;
   otpSent: boolean;
   error: string | null;
-  devOtp: string | null; // shown in dev mode only
+  devOtp: string | null;
 
   sendOtp: (phone: string) => Promise<void>;
   verifyOtp: (code: string) => Promise<boolean>;
@@ -78,7 +78,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({
         otpSent: true,
         loading: false,
-        // dev_otp is only present when MSG91_DEV_MODE=true on backend
         devOtp: data.dev_otp ?? null,
       });
     } catch (err: any) {
@@ -107,9 +106,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const appUser: AppUser = {
         id: data.user_id,
         phone: data.phone,
-        name: '',
-        email: '',
-        addresses: [],
+        name: data.name || '',        // ✅ use server name if returned
+        email: data.email || '',
+        addresses: data.addresses || [],
       };
 
       _sessionUser = appUser;
@@ -121,7 +120,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         devOtp: null,
       });
 
-      return !appUser.name; // true = needs profile setup
+      return !appUser.name; // true = new user, needs profile setup
     } catch (err: any) {
       console.log('🔴 verifyOtp error:', err?.message);
       set({ error: 'Could not reach server. Is the backend running?', loading: false });
@@ -145,7 +144,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   // ── Load Session ─────────────────────────────────────────────────────────────
   loadSession: async () => {
-    // Restore in-memory session if available
     set({ user: _sessionUser, session: _sessionUser, loading: false });
   },
 

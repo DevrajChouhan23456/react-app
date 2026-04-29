@@ -22,13 +22,16 @@ export const COLORS = {
   white: '#FFFFFF',
   black: '#0A0A0A',
 
-  // Backgrounds — warm cream palette
+  // Backgrounds
   bg: '#FFF8F2',
   bgDark: '#1A0F00',
   surface: '#FFFFFF',
   surfaceWarm: '#FFF3E8',
   surfaceOffset: '#F7F0E8',
   surfaceDark: 'rgba(255,255,255,0.06)',
+
+  // Secondary (alias for primaryGlow — used in checkout)
+  secondary: 'rgba(255,107,0,0.12)',
 
   // Text
   text: '#1C1008',
@@ -40,7 +43,7 @@ export const COLORS = {
   border: 'rgba(0,0,0,0.07)',
   borderWarm: '#EDE0D0',
 
-  // Gradients (used as arrays in LinearGradient)
+  // Gradients
   gradientPrimary: ['#FF8C33', '#FF6B00', '#E55A00'],
   gradientWarm: ['#FFF8F2', '#FFF0DC'],
   gradientCard: ['rgba(255,255,255,0)', 'rgba(255,255,255,0.95)'],
@@ -72,23 +75,23 @@ export const SHADOW = {
   xs: Platform.select({
     web: { boxShadow: '0 1px 3px rgba(0,0,0,0.06)' },
     default: { shadowColor: '#FF6B00', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 3, elevation: 1 },
-  }),
+  }) ?? {},
   sm: Platform.select({
     web: { boxShadow: '0 2px 8px rgba(255,107,0,0.08), 0 1px 2px rgba(0,0,0,0.04)' },
     default: { shadowColor: '#FF6B00', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.10, shadowRadius: 8, elevation: 3 },
-  }),
+  }) ?? {},
   md: Platform.select({
     web: { boxShadow: '0 4px 16px rgba(255,107,0,0.12), 0 2px 4px rgba(0,0,0,0.06)' },
     default: { shadowColor: '#FF6B00', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.14, shadowRadius: 16, elevation: 6 },
-  }),
+  }) ?? {},
   lg: Platform.select({
     web: { boxShadow: '0 8px 32px rgba(255,107,0,0.18), 0 2px 8px rgba(0,0,0,0.08)' },
     default: { shadowColor: '#FF6B00', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.20, shadowRadius: 32, elevation: 12 },
-  }),
+  }) ?? {},
   glow: Platform.select({
     web: { boxShadow: '0 0 24px rgba(255,107,0,0.35)' },
     default: { shadowColor: '#FF6B00', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.35, shadowRadius: 24, elevation: 10 },
-  }),
+  }) ?? {},
 };
 
 export const TYPOGRAPHY = {

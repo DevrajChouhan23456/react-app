@@ -43,6 +43,19 @@
         { "fonts": [] }
       ],
       [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Dal Bhaffle to use your location for delivery."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#FF6B00"
+        }
+      ],
+      [
         "@react-native-firebase/app",
         {
           "android": {
